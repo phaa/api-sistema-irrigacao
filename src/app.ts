@@ -6,9 +6,10 @@ import { json, urlencoded } from "body-parser";
 
 const app: Express = express();
 
-const mqttServer: string = "f69ddce2c70f45d98ef6f55e73514133.s2.eu.hivemq.cloud";
-
-const mqttClient: MqttClient = connect(`mqtt://${mqttServer}` , { port: 8883 });
+const host = "test.mosquitto.org";
+const port = "1883";
+const connectUrl = `mqtt://${host}:${port}`;
+const mqttClient = connect(connectUrl);
 
 app.use(json());
 
@@ -26,7 +27,7 @@ app.use(
     res.status(500).json({ message: err.message });
   }
 );
-
+/*
 connection
   .sync()
   .then(() => {
@@ -35,16 +36,28 @@ connection
   .catch((err) => {
     console.log("Erro", err);
   });
-
+*/
 app.listen(3000, () => {
   console.log("Servidor iniciado na porta 3000");
 });
 
-mqttClient.subscribe('presence_phaa', () => {
-  console.log("Inscrito com sucesso no tópico MQTT");
-});
-mqttClient.publish('presence_phaa', 'boa tarde');
+const topic = "/nodejs/mqtt";
 
-mqttClient.on('message_phaa', (topic: string, message: string) => {
-  console.log(message)
+mqttClient.on("connect", () => {
+  console.log("Connected");
+
+  mqttClient.subscribe([topic], () => {
+    console.log(`Subscribe to topic "${topic}"`);
+  });
+
+  mqttClient.publish(topic, "nodejs mqtt test", { qos: 0, retain: false }, (error) => {
+    if (error) {
+      console.error(error);
+    }
+  });
+
+});
+
+mqttClient.on("message", (topic, payload) => {
+  console.log("Received Message:", topic, payload.toString())
 });
