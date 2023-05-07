@@ -9,7 +9,7 @@ const app: Express = express();
 const host = "test.mosquitto.org";
 const port = "1883";
 const connectUrl = `mqtt://${host}:${port}`;
-const mqttClient = connect(connectUrl);
+const mqttClient: MqttClient = connect(connectUrl);
 
 app.use(json());
 
@@ -46,16 +46,16 @@ const topic = "/nodejs/mqtt";
 mqttClient.on("connect", () => {
   console.log("Connected");
 
-  mqttClient.subscribe([topic], () => {
-    console.log(`Subscribe to topic "${topic}"`);
-  });
+});
 
-  mqttClient.publish(topic, "nodejs mqtt test", { qos: 0, retain: false }, (error) => {
-    if (error) {
-      console.error(error);
-    }
-  });
+mqttClient.subscribe([topic], () => {
+  console.log(`Subscribe to topic "${topic}"`);
+});
 
+mqttClient.publish(topic, "nodejs mqtt test", { qos: 0, retain: false }, (error) => {
+  if (error) {
+    console.error(error);
+  }
 });
 
 mqttClient.on("message", (topic, payload) => {
