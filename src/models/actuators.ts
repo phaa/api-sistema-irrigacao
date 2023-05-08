@@ -3,19 +3,25 @@ import { Greenhouse } from "./greenhouse";
 
 @Table({
   timestamps: false,
-  tableName: "sensors_air",
+  tableName: "actuators",
 })
-export class SensorsAir extends Model {
+export class Actuator extends Model {
   @Column({
     type: DataType.INTEGER,
   })
-  id_air_sensor!: number;
+  id_actuator!: number;
 
   @Column({
     type: DataType.INTEGER,
     allowNull: false,
   })
   pin!: number;
+
+  @Column({
+    type: DataType.STRING(45),
+    allowNull: false,
+  })
+  description!: number;
 
   // Greenhouse Foreign keys 
   @ForeignKey(() => Greenhouse)

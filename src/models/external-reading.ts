@@ -4,7 +4,7 @@ import { Table, Model, Column, DataType } from "sequelize-typescript";
   timestamps: false,
   tableName: "external_readings",
 })
-export class ExaustPulse extends Model {
+export class ExternalReading extends Model {
   @Column({
     type: DataType.INTEGER,
   })
