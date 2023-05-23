@@ -1,66 +1,139 @@
-import express, { Express, Request, Response } from "express";
+import express from 'express';
+import bodyParser from 'body-parser';
+import mongoose from 'mongoose';
 import { MqttClient, connect } from "mqtt";
-import userRoutes from "./routes/users";
-import connection from "./db/config";
-import { json, urlencoded } from "body-parser";
 
-const app: Express = express();
-                                                      
-const host = "test.mosquitto.org";
-const port = "1883";
-const connectUrl = `mqtt://${host}:${port}`;
-const mqttClient: MqttClient = connect(connectUrl);
+//Models
+import GreenhouseModel from './greenhouses/greenhouse.model';
+import SensorModel from './sensors/sensor.model';
 
-app.use(json());
+// Controllers
+import Controller from './interfaces/controller.interface';
+import Greenhouse from './greenhouses/greenhouse.interface';
+import ActuatorModel from './actuators/actuator.model';
+import Board from './board/board.interface';
+import BoardModel from './board/board.model';
 
-app.use(urlencoded({ extended: true }));
+class App {
+  // Varáveis de classe 
+  private app: express.Application;
+  private controllers: Controller[];
 
-app.use("/users", userRoutes);
+  // Dados de sensores e estufas
+  private greenhouses!: Greenhouse[];
+  private boards!: Board[];
 
-app.use(
-  (
-    err: Error,
-    req: express.Request,
-    res: express.Response,
-    next: express.NextFunction
-  ) => {
-    res.status(500).json({ message: err.message });
+  constructor(controllers: Controller[]) {
+    this.app = express();
+    this.controllers = controllers;
   }
-);
 
-app.listen(3000, () => {
-  console.log("Servidor iniciado na porta 3000");
-});
+  public async initialize() {
+    // Aguarda o sistema conectar com o Mongo e sincronizar dados
+    await this.connectDatabase();
+    await this.syncToDatabase();
 
-const topic = "/nodejs/mqtt";
-
-mqttClient.on("connect", () => {
-  console.log("Connected");
-
-});
-
-mqttClient.subscribe([topic], () => {
-  console.log(`Subscribe to topic "${topic}"`);
-});
-
-mqttClient.publish(topic, "nodejs mqtt test", { qos: 0, retain: false }, (error) => {
-  if (error) {
-    console.error(error);
+    // Executa demais funções inicializadoras
+    this.initExpress();
+    this.initializeMiddlewares();
+    this.initializeControllers();
+    this.configureMqtt();
+    this.configureMqttLoop();
   }
-});
 
-mqttClient.on("message", (topic, payload) => {
-  console.log("Received Message:", topic, payload.toString())
-});
+  private initExpress() {
+    const { PORT } = process.env;
+    this.app.listen(PORT, () => {
+      console.log(`Servidor iniciando na porta ${PORT}`);
+    });
+  }
+
+  private initializeMiddlewares() {
+    this.app.use(bodyParser.json());
+  }
+
+  private initializeControllers() {
+    this.controllers.forEach((controller) => {
+      this.app.use('/', controller.router);
+    });
+  }
+
+  private async connectDatabase() {
+    const { MONGO_USER, MONGO_PASSWORD, MONGO_PATH } = process.env;
+    try {
+      console.log("Conectando ao banco de dados")
+      await mongoose.connect(`mongodb+srv://${MONGO_USER}:${MONGO_PASSWORD}@${MONGO_PATH}`);
+      console.log("Conectado com sucesso ao banco de dados")
+    } catch (error) {
+      console.log(error);
+    }
+  }
+
+  private async syncToDatabase() {
+    this.greenhouses = await GreenhouseModel.find<Greenhouse>();
+    for (let greenhouse of this.greenhouses) {
+      const greenhouseSensors = await SensorModel.find({ greenhouse: greenhouse.id });
+      greenhouse.sensors = greenhouseSensors;
+
+      const greenhouseActuators = await ActuatorModel.find({ greenhouse: greenhouse.id });
+      greenhouse.actuators = greenhouseActuators;
+    }
+
+    this.boards = await BoardModel.find<Board>();
+    for (let board of this.boards) {
+      const boardSensors = await SensorModel.find({ board: board.id });
+      board.sensors = boardSensors;
+
+      const boardActuators = await ActuatorModel.find({ board: board.id });
+      board.actuators = boardActuators;
+    }
+  }
+
+  private configureMqtt() {
+    const { MQTT_BROKER_URL } = process.env;
+    const mqttClient: MqttClient = connect(`mqtt://${MQTT_BROKER_URL}`);
+
+    mqttClient.on("connect", () => {
+      console.log(`Conectado com sucesso ao broker: ${MQTT_BROKER_URL}`);
+    });
+
+    const topics: string[] = this.boards.map(board => board.outputTopic);
+    mqttClient.subscribe(topics, () => {
+      console.log("Iniciando inscrição nos tópicos...");
+      topics.forEach(topic => console.log(`Inscrito no tópico ${topic}`));
+    });
+
+    mqttClient.on("message", (topic: string, payload: Buffer) => {
+      console.log("Received Message:", topic, payload.toString())
+    });
+  }
+
+  // Arranjo para evitar o time drift
+  private configureMqttLoop() {
+    // Verifica a hora atual e calcula o delay até o proximo intervalo
+    const func = this.mqttLoop;
+    const interval = 10000; // 1 min /30s
+    let now = new Date();
+    //console.log("\n"+now+"\n")
+    let delay = interval - now.valueOf() % interval;
+
+    const start = () => {
+      // Executa a função passada
+      func();
+      // ... E inicia a recursividade
+      this.configureMqttLoop();
+    }
+
+    // Segura a execução até o momento certo
+    setTimeout(start, delay);
+  }
+
+  private async mqttLoop() {
+    // pedir o estado de todos os pinos que estão sendo utilizados em cada mcu
+    const greenhouses = await GreenhouseModel.find();
 
 
-/*
-connection
-  .sync()
-  .then(() => {
-    console.log("Banco de dados conectado com sucesso");
-  })
-  .catch((err) => {
-    console.log("Erro", err);
-  });
-*/
+  }
+}
+
+export default App;
