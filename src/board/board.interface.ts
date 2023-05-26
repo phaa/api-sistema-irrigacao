@@ -9,8 +9,8 @@ interface Board {
   outputTopic: string;
 
   // Opcionais
-  sensors?: Sensor[];
-  actuators?: Actuator[];
+  sensors: Sensor[];
+  actuators: Actuator[];
 };
 
 export default Board;

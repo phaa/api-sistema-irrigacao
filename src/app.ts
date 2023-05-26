@@ -17,6 +17,7 @@ import BoardModel from './board/board.model';
 class App {
   // Varáveis de classe 
   private app: express.Application;
+  private mqttClient!: MqttClient;
   private controllers: Controller[];
 
   // Dados de sensores e estufas
@@ -29,6 +30,8 @@ class App {
   }
 
   public async initialize() {
+    this.mqttLoop = this.mqttLoop.bind(this);
+
     // Aguarda o sistema conectar com o Mongo e sincronizar dados
     await this.connectDatabase();
     await this.syncToDatabase();
@@ -87,23 +90,24 @@ class App {
       const boardActuators = await ActuatorModel.find({ board: board.id });
       board.actuators = boardActuators;
     }
+    console.log(this.boards)
   }
 
   private configureMqtt() {
     const { MQTT_BROKER_URL } = process.env;
-    const mqttClient: MqttClient = connect(`mqtt://${MQTT_BROKER_URL}`);
+    this.mqttClient = connect(`mqtt://${MQTT_BROKER_URL}`);
 
-    mqttClient.on("connect", () => {
+    this.mqttClient.on("connect", () => {
       console.log(`Conectado com sucesso ao broker: ${MQTT_BROKER_URL}`);
     });
 
     const topics: string[] = this.boards.map(board => board.outputTopic);
-    mqttClient.subscribe(topics, () => {
+    this.mqttClient.subscribe(topics, () => {
       console.log("Iniciando inscrição nos tópicos...");
       topics.forEach(topic => console.log(`Inscrito no tópico ${topic}`));
     });
 
-    mqttClient.on("message", (topic: string, payload: Buffer) => {
+    this.mqttClient.on("message", (topic: string, payload: Buffer) => {
       console.log("Received Message:", topic, payload.toString())
     });
   }
@@ -129,10 +133,14 @@ class App {
   }
 
   private async mqttLoop() {
+    console.log(this.boards)
     // pedir o estado de todos os pinos que estão sendo utilizados em cada mcu
-    const greenhouses = await GreenhouseModel.find();
-
-
+    for (let board of this.boards) {
+      for (let sensor of board.sensors) {
+        this.mqttClient.publish(board.inputTopic, `reading:${sensor.pin}`);
+        console.log(`Publicou <<reading:${sensor.pin}>> no tópico ${board.inputTopic}`)
+      } 
+    }
   }
 }
 
