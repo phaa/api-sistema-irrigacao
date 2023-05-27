@@ -13,6 +13,12 @@ import Greenhouse from './greenhouses/greenhouse.interface';
 import ActuatorModel from './actuators/actuator.model';
 import Board from './board/board.interface';
 import BoardModel from './board/board.model';
+import Actuator from './actuators/actuator.interface';
+import Sensor from './sensors/sensor.interface';
+
+interface Test {
+  name?: string;
+}
 
 class App {
   // Varáveis de classe 
@@ -42,6 +48,10 @@ class App {
     this.initializeControllers();
     this.configureMqtt();
     this.configureMqttLoop();
+
+    const test: Test = {};
+    test.name = "pedro";
+    console.log("nome : " + test.name);
   }
 
   private initExpress() {
@@ -74,23 +84,24 @@ class App {
 
   private async syncToDatabase() {
     this.greenhouses = await GreenhouseModel.find<Greenhouse>();
-    for (let greenhouse of this.greenhouses) {
-      const greenhouseSensors = await SensorModel.find({ greenhouse: greenhouse.id });
+    for await (let greenhouse of this.greenhouses) {
+      const greenhouseSensors = await SensorModel.find<Sensor>({ greenhouse: greenhouse.id });
       greenhouse.sensors = greenhouseSensors;
 
-      const greenhouseActuators = await ActuatorModel.find({ greenhouse: greenhouse.id });
+      const greenhouseActuators = await ActuatorModel.find<Actuator>({ greenhouse: greenhouse.id });
       greenhouse.actuators = greenhouseActuators;
     }
 
     this.boards = await BoardModel.find<Board>();
-    for (let board of this.boards) {
-      const boardSensors = await SensorModel.find({ board: board.id });
+    for await (let board of this.boards) {
+      const boardSensors = await SensorModel.find<Sensor>();
       board.sensors = boardSensors;
 
-      const boardActuators = await ActuatorModel.find({ board: board.id });
+      const boardActuators = await ActuatorModel.find<Actuator>({ board: board.id });
       board.actuators = boardActuators;
     }
-    console.log(this.boards)
+    //console.log(this.boards)
+
   }
 
   private configureMqtt() {
@@ -101,7 +112,7 @@ class App {
       console.log(`Conectado com sucesso ao broker: ${MQTT_BROKER_URL}`);
     });
 
-    const topics: string[] = this.boards.map(board => board.outputTopic);
+    const topics: string[] = this.boards.map(board => `placa/${board.id}/response`);
     this.mqttClient.subscribe(topics, () => {
       console.log("Iniciando inscrição nos tópicos...");
       topics.forEach(topic => console.log(`Inscrito no tópico ${topic}`));
@@ -109,6 +120,31 @@ class App {
 
     this.mqttClient.on("message", (topic: string, payload: Buffer) => {
       console.log("Received Message:", topic, payload.toString())
+
+      const boardId = topic.split("/")[1];
+      const board = this.getLoadedBoardById(boardId);
+      if (board) {
+        //console.log(board)
+
+        // pin/cmd/value?
+        // 10/a/78.0
+        // 10/on
+        // 10/off
+        const splitResponse = payload.toString().split('/');
+        const pin = Number(splitResponse[0]);
+        const cmd = splitResponse[1];
+
+        if (splitResponse.length == 3) {
+          const analogRead = splitResponse[2];
+          console.log(`Leitura analógica: ${analogRead}, setando BD...`);
+          const sensor = this.getLoadedSensor(board.id, pin);
+          console.log(`Sensor: ${sensor}`)
+        }
+        else {
+          console.log(`Comando ${cmd} para o pino ${pin} confirmado, mudando no BD...`)
+        }
+      }
+
     });
   }
 
@@ -133,13 +169,36 @@ class App {
   }
 
   private async mqttLoop() {
-    console.log(this.boards)
+    // console.log(this.boards)
     // pedir o estado de todos os pinos que estão sendo utilizados em cada mcu
+
+
     for (let board of this.boards) {
       for (let sensor of board.sensors) {
-        this.mqttClient.publish(board.inputTopic, `reading:${sensor.pin}`);
-        console.log(`Publicou <<reading:${sensor.pin}>> no tópico ${board.inputTopic}`)
-      } 
+        this.mqttClient.publish(`placa/${board.id}/command`, `reading:${sensor.pin}`);
+        //console.log(`Publicou "reading:${sensor.pin}" no tópico "placa/${board.id}/command"`);
+      }
+    }
+  }
+
+  private getLoadedBoardById(boardId: string) {
+    for (let board of this.boards) {
+      if (board.id == boardId) {
+        return board;
+      }
+    }
+    return null;
+  }
+
+  private getLoadedSensor(boardId: string, pin: number) {
+    for (let board of this.boards) {
+      if (board.id == boardId) {
+        for (let sensor of board.sensors) {
+          if (sensor.pin == pin) {
+            return sensor;
+          }
+        }
+      }
     }
   }
 }

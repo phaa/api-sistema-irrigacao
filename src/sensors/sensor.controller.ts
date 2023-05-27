@@ -48,7 +48,7 @@ class SensorController implements Controller {
 
   private getSensorsByBoard: RequestHandler = async (req: Request, res: Response) => {
     try {
-      const boardId = req.params.greenhouseId;
+      const boardId = req.params.boardId;
       const sensors = await this.sensor.find({ board: boardId });
       return res.status(200).json({ sensors: sensors });
     }
@@ -83,6 +83,7 @@ class SensorController implements Controller {
 
   private createSensor: RequestHandler = async (req: Request, res: Response) => {
     try {
+      // colocar verificação se o pino já está sendo usado na placa
       const sensorData: Sensor = req.body;
       const createdSensor = new this.sensor(sensorData);
       await createdSensor.save();
