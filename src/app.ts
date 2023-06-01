@@ -100,8 +100,7 @@ class App {
       const boardActuators = await ActuatorModel.find<Actuator>({ board: board.id });
       board.actuators = boardActuators;
     }
-    //console.log(this.boards)
-
+    //console.log(this.boards)s
   }
 
   private configureMqtt() {
@@ -118,33 +117,36 @@ class App {
       topics.forEach(topic => console.log(`Inscrito no tópico ${topic}`));
     });
 
-    this.mqttClient.on("message", (topic: string, payload: Buffer) => {
+    this.mqttClient.on("message", async (topic: string, payload: Buffer) => {
       console.log("Received Message:", topic, payload.toString())
 
       const boardId = topic.split("/")[1];
       const board = this.getLoadedBoardById(boardId);
-      if (board) {
-        //console.log(board)
-
-        // pin/cmd/value?
-        // 10/a/78.0
-        // 10/on
-        // 10/off
-        const splitResponse = payload.toString().split('/');
+      if (!!board) {
+        const splitResponse = payload.toString().split('/'); // pin/cmd/value? | 10/a/78.0 | 10/on | 10/off
         const pin = Number(splitResponse[0]);
         const cmd = splitResponse[1];
 
-        if (splitResponse.length == 3) {
-          const analogRead = splitResponse[2];
-          console.log(`Leitura analógica: ${analogRead}, setando BD...`);
-          const sensor = this.getLoadedSensor(board.id, pin);
-          console.log(`Sensor: ${sensor}`)
+        if (splitResponse.length > 2) {
+          const actuator = this.getLoadedActuator(board.id, pin);
+          if (!!actuator) {
+            actuator.lastValue = (cmd == "on") ? 1 : 0;
+            await ActuatorModel.findByIdAndUpdate(actuator.id, { lastValue: actuator.lastValue }, { new: true });
+            console.log(`Comando ${cmd} para o pino ${pin} confirmado, mudando no BD...`);
+          }
+          //console.log(`Atuador: ${this.getLoadedActuator(board.id, pin)}`);
         }
         else {
-          console.log(`Comando ${cmd} para o pino ${pin} confirmado, mudando no BD...`)
+          const analogRead = Number(splitResponse[2]);
+          const sensor = this.getLoadedSensor(board.id, pin);
+          if (!!sensor) {
+            sensor.lastValue = analogRead;
+            await SensorModel.findByIdAndUpdate(sensor.id, { lastValue: sensor.lastValue }, { new: true });
+            console.log(`Leitura analógica: ${analogRead}, setando BD...`);
+          }
+          //console.log(`Sensor: ${this.getLoadedSensor(board.id, pin)}`)
         }
       }
-
     });
   }
 
@@ -171,8 +173,6 @@ class App {
   private async mqttLoop() {
     // console.log(this.boards)
     // pedir o estado de todos os pinos que estão sendo utilizados em cada mcu
-
-
     for (let board of this.boards) {
       for (let sensor of board.sensors) {
         this.mqttClient.publish(`placa/${board.id}/command`, `reading:${sensor.pin}`);
@@ -196,6 +196,18 @@ class App {
         for (let sensor of board.sensors) {
           if (sensor.pin == pin) {
             return sensor;
+          }
+        }
+      }
+    }
+  }
+
+  private getLoadedActuator(boardId: string, pin: number) {
+    for (let board of this.boards) {
+      if (board.id == boardId) {
+        for (let actuator of board.actuators) {
+          if (actuator.pin == pin) {
+            return actuator;
           }
         }
       }
