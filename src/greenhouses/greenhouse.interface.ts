@@ -1,5 +1,6 @@
 import Actuator from "../actuators/actuator.interface";
 import Sensor from "../sensors/sensor.interface";
+import User from "../users/users.interface";
 
 interface Greenhouse {
   id: string;
@@ -11,6 +12,7 @@ interface Greenhouse {
   idealSoilMoisture: number;
   createdAt: string;
   updatedAt: string;
+  user: User;
 
   // Opcionais
   sensors?: Sensor[];

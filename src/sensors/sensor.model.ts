@@ -5,6 +5,8 @@ const sensorSchema = new mongoose.Schema<Sensor>({
   pin: { type: Number, required: true },
   description: { type: String, required: true },
   lastValue: { type: Number, default: 0 },
+  sensorType: { type: String, required: true },
+  idealValue: { type: Number, required: true },
   board: {
     ref: 'Board',
     type: mongoose.Schema.Types.ObjectId,

@@ -3,7 +3,7 @@ import bodyParser from 'body-parser';
 import mongoose from 'mongoose';
 import { MqttClient, connect } from "mqtt";
 
-//Models
+// Models
 import GreenhouseModel from './greenhouses/greenhouse.model';
 import SensorModel from './sensors/sensor.model';
 
@@ -16,9 +16,6 @@ import BoardModel from './board/board.model';
 import Actuator from './actuators/actuator.interface';
 import Sensor from './sensors/sensor.interface';
 
-interface Test {
-  name?: string;
-}
 
 class App {
   // Varáveis de classe 
@@ -48,10 +45,6 @@ class App {
     this.initializeControllers();
     this.configureMqtt();
     this.configureMqttLoop();
-
-    const test: Test = {};
-    test.name = "pedro";
-    console.log("nome : " + test.name);
   }
 
   private initExpress() {
@@ -100,7 +93,7 @@ class App {
       const boardActuators = await ActuatorModel.find<Actuator>({ board: board.id });
       board.actuators = boardActuators;
     }
-    //console.log(this.boards)s
+    //console.log(this.boards)
   }
 
   private configureMqtt() {
@@ -111,7 +104,7 @@ class App {
       console.log(`Conectado com sucesso ao broker: ${MQTT_BROKER_URL}`);
     });
 
-    const topics: string[] = this.boards.map(board => `placa/${board.id}/response`);
+    const topics: string[] = this.boards.map(board => `placa/${board.id}/output`);
     this.mqttClient.subscribe(topics, () => {
       console.log("Iniciando inscrição nos tópicos...");
       topics.forEach(topic => console.log(`Inscrito no tópico ${topic}`));
@@ -127,7 +120,7 @@ class App {
         const pin = Number(splitResponse[0]);
         const cmd = splitResponse[1];
 
-        if (splitResponse.length > 2) {
+        if (splitResponse.length == 2) {
           const actuator = this.getLoadedActuator(board.id, pin);
           if (!!actuator) {
             actuator.lastValue = (cmd == "on") ? 1 : 0;
@@ -136,13 +129,15 @@ class App {
           }
           //console.log(`Atuador: ${this.getLoadedActuator(board.id, pin)}`);
         }
-        else {
+        else if (splitResponse.length == 3) {
           const analogRead = Number(splitResponse[2]);
           const sensor = this.getLoadedSensor(board.id, pin);
           if (!!sensor) {
             sensor.lastValue = analogRead;
             await SensorModel.findByIdAndUpdate(sensor.id, { lastValue: sensor.lastValue }, { new: true });
-            console.log(`Leitura analógica: ${analogRead}, setando BD...`);
+            console.log(`Leitura analógica: ${analogRead}, mudando no BD...`);
+            
+            //Adicionar condicionais que verificam as variáveis ideais da estufa e setam os atuadores de acordo
           }
           //console.log(`Sensor: ${this.getLoadedSensor(board.id, pin)}`)
         }
@@ -175,7 +170,7 @@ class App {
     // pedir o estado de todos os pinos que estão sendo utilizados em cada mcu
     for (let board of this.boards) {
       for (let sensor of board.sensors) {
-        this.mqttClient.publish(`placa/${board.id}/command`, `reading:${sensor.pin}`);
+        this.mqttClient.publish(`placa/${board.id}/input`, `reading:${sensor.pin}`);
         //console.log(`Publicou "reading:${sensor.pin}" no tópico "placa/${board.id}/command"`);
       }
     }

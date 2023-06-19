@@ -1,7 +1,7 @@
 import * as mongoose from 'mongoose';
 import Greenhouse from './greenhouse.interface';
 
-const greenhouseSchema = new mongoose.Schema({
+const greenhouseSchema = new mongoose.Schema<Greenhouse>({
   description: String,
   irrigating: {
     type: Boolean,
@@ -14,6 +14,10 @@ const greenhouseSchema = new mongoose.Schema({
   idealAirHumidity: Number,
   idealAirTemperature: Number,
   idealSoilMoisture: Number,
+  user: {
+    ref: 'User',
+    type: mongoose.Schema.Types.ObjectId,
+  },
 }, { 
   timestamps: true 
 });

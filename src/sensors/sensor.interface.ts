@@ -5,6 +5,8 @@ interface Sensor {
   pin: number;
   description: string;
   lastValue?: number;
+  sensorType: string;
+  idealValue: number;
   board: Types.ObjectId,
   greenhouse: Types.ObjectId,
 };
