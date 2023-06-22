@@ -5,6 +5,7 @@ interface Actuator {
   pin: number;
   description: string;
   lastValue?: number;
+  actuatorType: string;
   board: Types.ObjectId,
   greenhouse: Types.ObjectId,
 };

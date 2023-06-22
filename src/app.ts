@@ -135,8 +135,13 @@ class App {
           if (!!sensor) {
             sensor.lastValue = analogRead;
             await SensorModel.findByIdAndUpdate(sensor.id, { lastValue: sensor.lastValue }, { new: true });
+
             console.log(`Leitura analógica: ${analogRead}, mudando no BD...`);
-            
+            console.log(sensor)
+
+            const greenhouse = this.getLoadedGreenhouse(sensor.greenhouse + "")
+            console.log(greenhouse)
+
             //Adicionar condicionais que verificam as variáveis ideais da estufa e setam os atuadores de acordo
           }
           //console.log(`Sensor: ${this.getLoadedSensor(board.id, pin)}`)
@@ -205,6 +210,14 @@ class App {
             return actuator;
           }
         }
+      }
+    }
+  }
+
+  private getLoadedGreenhouse(greenhouseId: string) {
+    for (let greenhouse of this.greenhouses) {
+      if (greenhouse.id == greenhouseId) {
+        return greenhouse;
       }
     }
   }

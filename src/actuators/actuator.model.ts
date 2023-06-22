@@ -5,6 +5,7 @@ const actuatorSchema = new mongoose.Schema<Actuator>({
   pin: { type: Number, required: true },
   description: { type: String, required: true },
   lastValue: { type: Number, default: 0 },
+  actuatorType: { type: String, required: true },
   board: {
     ref: 'Board',
     type: mongoose.Schema.Types.ObjectId,
