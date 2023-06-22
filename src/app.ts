@@ -134,13 +134,35 @@ class App {
           const sensor = this.getLoadedSensor(board.id, pin);
           if (!!sensor) {
             sensor.lastValue = analogRead;
+
+            // Atualiza no banco de dados
             await SensorModel.findByIdAndUpdate(sensor.id, { lastValue: sensor.lastValue }, { new: true });
 
-            console.log(`Leitura analógica: ${analogRead}, mudando no BD...`);
-            console.log(sensor)
-
             const greenhouse = this.getLoadedGreenhouse(sensor.greenhouse + "")
-            console.log(greenhouse)
+            
+            if(greenhouse) {
+              switch(sensor.sensorType) {
+                case "soil_moisture": {
+                  if(sensor.lastValue < greenhouse.idealSoilMoisture) {
+                    
+                  }
+                  break;
+                } 
+                case "air_temperature": {
+                  break;
+                } 
+                case "air_humidity": {
+                  break;
+                } 
+                case "sun_incidence": {
+                  break;
+                } 
+                  
+              }
+            }
+            
+            
+            //console.log(greenhouse)
 
             //Adicionar condicionais que verificam as variáveis ideais da estufa e setam os atuadores de acordo
           }
