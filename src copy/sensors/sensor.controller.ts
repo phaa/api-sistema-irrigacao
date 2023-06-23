@@ -16,6 +16,8 @@ class SensorController implements Controller {
     // Rotas de consulta
     this.router.get(this.path, this.getAllSensors);
     this.router.get(`${this.path}/:id`, this.getSensorById);
+    this.router.get(`${this.path}/by-greenhouse/:greenhouseId`, this.getSensorsByGreenhouse);
+    this.router.get(`${this.path}/by-board/:boardId`, this.getSensorsByBoard);
 
     // Rotas de modificação
     this.router.patch(`${this.path}/:id`, this.modifySensor);
@@ -26,6 +28,28 @@ class SensorController implements Controller {
   private getAllSensors: RequestHandler = async (req: Request, res: Response) => {
     try {
       const sensors: Sensor[] = await this.sensor.find<Sensor>();
+      return res.status(200).json({ sensors: sensors });
+    }
+    catch (error: any) {
+      return res.status(500).json({ message: error.message });
+    }
+  }
+
+  private getSensorsByGreenhouse: RequestHandler = async (req: Request, res: Response) => {
+    try {
+      const greenhouseId = req.params.greenhouseId;
+      const sensors = await this.sensor.find({ greenhouse: greenhouseId });
+      return res.status(200).json({ sensors: sensors });
+    }
+    catch (error: any) {
+      return res.status(500).json({ message: error.message });
+    }
+  }
+
+  private getSensorsByBoard: RequestHandler = async (req: Request, res: Response) => {
+    try {
+      const boardId = req.params.boardId;
+      const sensors = await this.sensor.find({ board: boardId });
       return res.status(200).json({ sensors: sensors });
     }
     catch (error: any) {

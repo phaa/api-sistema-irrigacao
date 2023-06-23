@@ -6,6 +6,14 @@ const actuatorSchema = new mongoose.Schema<Actuator>({
   description: { type: String, required: true },
   lastValue: { type: Number, default: 0 },
   actuatorType: { type: String, required: true },
+  board: {
+    ref: 'Board',
+    type: mongoose.Schema.Types.ObjectId,
+  },
+  greenhouse: {
+    ref: 'Greenhouse',
+    type: mongoose.Schema.Types.ObjectId,
+  },
 }, { 
   timestamps: true 
 });

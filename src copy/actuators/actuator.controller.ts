@@ -16,6 +16,8 @@ class ActuatorController implements Controller {
     // Rotas de consulta
     this.router.get(this.path, this.getAllActuators);
     this.router.get(`${this.path}/:id`, this.getActuatorsById);
+    this.router.get(`${this.path}/by-greenhouse/:greenhouseId`, this.getActuatorsByGreenhouse);
+    this.router.get(`${this.path}/by-board/:boardId`, this.getActuatorsByBoard);
 
     // Rotas de modificação
     this.router.patch(`${this.path}/:id`, this.modifyActuator);
@@ -26,6 +28,28 @@ class ActuatorController implements Controller {
   private getAllActuators: RequestHandler = async (req: Request, res: Response) => {
     try {
       const actuators = await this.actuator.find();
+      return res.status(200).json({ actuators: actuators });
+    }
+    catch (error: any) {
+      return res.status(500).json({ message: error.message });
+    }
+  }
+
+  private getActuatorsByGreenhouse: RequestHandler = async (req: Request, res: Response) => {
+    try {
+      const greenhouseId = req.params.greenhouseId;
+      const actuators = await this.actuator.find({ greenhouse: greenhouseId });
+      return res.status(200).json({ actuators: actuators });
+    }
+    catch (error: any) {
+      return res.status(500).json({ message: error.message });
+    }
+  }
+
+  private getActuatorsByBoard: RequestHandler = async (req: Request, res: Response) => {
+    try {
+      const boardId = req.params.greenhouseId;
+      const actuators = await this.actuator.find({ board: boardId });
       return res.status(200).json({ actuators: actuators });
     }
     catch (error: any) {

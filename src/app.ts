@@ -22,10 +22,11 @@ class App {
   private app: express.Application;
   private mqttClient!: MqttClient;
   private controllers: Controller[];
+  private sensors!: Sensor[];
+  private actuators!: Actuator[];
 
-  // Dados de sensores e estufas
-  private greenhouses!: Greenhouse[];
-  private boards!: Board[];
+  private inputTopic!: 'esp32/placa/input';
+  private outputTopic!: 'esp32/placa/output';
 
   constructor(controllers: Controller[]) {
     this.app = express();
@@ -35,7 +36,7 @@ class App {
   public async initialize() {
     this.mqttLoop = this.mqttLoop.bind(this);
 
-    // Aguarda o sistema conectar com o Mongo e sincronizar dados
+    // Aguarda o sistema conectar com o Mongo
     await this.connectDatabase();
     await this.syncToDatabase();
 
@@ -76,24 +77,8 @@ class App {
   }
 
   private async syncToDatabase() {
-    this.greenhouses = await GreenhouseModel.find<Greenhouse>();
-    for await (let greenhouse of this.greenhouses) {
-      const greenhouseSensors = await SensorModel.find<Sensor>({ greenhouse: greenhouse.id });
-      greenhouse.sensors = greenhouseSensors;
-
-      const greenhouseActuators = await ActuatorModel.find<Actuator>({ greenhouse: greenhouse.id });
-      greenhouse.actuators = greenhouseActuators;
-    }
-
-    this.boards = await BoardModel.find<Board>();
-    for await (let board of this.boards) {
-      const boardSensors = await SensorModel.find<Sensor>();
-      board.sensors = boardSensors;
-
-      const boardActuators = await ActuatorModel.find<Actuator>({ board: board.id });
-      board.actuators = boardActuators;
-    }
-    //console.log(this.boards)
+    this.sensors = await SensorModel.find<Sensor>();
+    this.actuators = await ActuatorModel.find<Actuator>();
   }
 
   private configureMqtt() {
@@ -104,72 +89,63 @@ class App {
       console.log(`Conectado com sucesso ao broker: ${MQTT_BROKER_URL}`);
     });
 
-    const topics: string[] = this.boards.map(board => `placa/${board.id}/output`);
-    this.mqttClient.subscribe(topics, () => {
-      console.log("Iniciando inscrição nos tópicos...");
-      topics.forEach(topic => console.log(`Inscrito no tópico ${topic}`));
+    this.mqttClient.subscribe(this.outputTopic, () => {
+      console.log(`Inscrito no tópico ${this.outputTopic}`)
     });
 
-    this.mqttClient.on("message", async (topic: string, payload: Buffer) => {
-      console.log("Received Message:", topic, payload.toString())
+    this.mqttClient.on("message", this.handleMqttLoop);
+  }
 
-      const boardId = topic.split("/")[1];
-      const board = this.getLoadedBoardById(boardId);
-      if (!!board) {
-        const splitResponse = payload.toString().split('/'); // pin/cmd/value? | 10/a/78.0 | 10/on | 10/off
-        const pin = Number(splitResponse[0]);
-        const cmd = splitResponse[1];
+  private async handleMqttLoop(topic: string, payloadBinary: Buffer) {
+    const payload = payloadBinary.toString();
 
-        if (splitResponse.length == 2) {
-          const actuator = this.getLoadedActuator(board.id, pin);
-          if (!!actuator) {
-            actuator.lastValue = (cmd == "on") ? 1 : 0;
-            await ActuatorModel.findByIdAndUpdate(actuator.id, { lastValue: actuator.lastValue }, { new: true });
-            console.log(`Comando ${cmd} para o pino ${pin} confirmado, mudando no BD...`);
-          }
-          //console.log(`Atuador: ${this.getLoadedActuator(board.id, pin)}`);
-        }
-        else if (splitResponse.length == 3) {
-          const analogRead = Number(splitResponse[2]);
-          const sensor = this.getLoadedSensor(board.id, pin);
-          if (!!sensor) {
-            sensor.lastValue = analogRead;
+    // pin/cmd/value? | 10/a/78.0 | 10/on | 10/off
+    const params = this.processPayload(payload)
 
-            // Atualiza no banco de dados
-            await SensorModel.findByIdAndUpdate(sensor.id, { lastValue: sensor.lastValue }, { new: true });
+    if (this.hasActuatorCmd(payload)) {
+      const actuator = this.getLoadedActuator(params.pin);
+      if (actuator) {
+        actuator.lastValue = Number(params.cmd) // lembrar de mudar no esp para enviar 0 ou 1
+        console.log(`Comando ${params.pin}/${params.cmd}. Mudando no BD`);
 
-            const greenhouse = this.getLoadedGreenhouse(sensor.greenhouse + "")
-            
-            if(greenhouse) {
-              switch(sensor.sensorType) {
-                case "soil_moisture": {
-                  if(sensor.lastValue < greenhouse.idealSoilMoisture) {
-                    
-                  }
-                  break;
-                } 
-                case "air_temperature": {
-                  break;
-                } 
-                case "air_humidity": {
-                  break;
-                } 
-                case "sun_incidence": {
-                  break;
-                } 
-                  
-              }
-            }
-            
-            
-            //console.log(greenhouse)
-
-            //Adicionar condicionais que verificam as variáveis ideais da estufa e setam os atuadores de acordo
-          }
-          //console.log(`Sensor: ${this.getLoadedSensor(board.id, pin)}`)
-        }
+        // Atualiza no banco de dados
+        await ActuatorModel.findByIdAndUpdate(actuator.id, { lastValue: actuator.lastValue }, { new: true });
       }
-    });
+    }
+    else if (this.hasSensorReading(payload)) {
+      const analogRead = params.reading;
+      const sensor = this.getLoadedSensor(params.pin);
+      if (sensor) {
+        sensor.lastValue = analogRead;
+
+        // Atualiza no banco de dados
+        await SensorModel.findByIdAndUpdate(sensor.id, { lastValue: sensor.lastValue }, { new: true });
+
+        switch (sensor.sensorType) {
+          case "soil_moisture": {
+            if (sensor.lastValue < sensor.idealValue) {
+              this.toggleActuator(greenhouse)
+            }
+            else if (sensor.lastValue >= sensor.idealValue + 10) {
+
+            }
+            break;
+          }
+          case "air_temperature": {
+            break;
+          }
+          case "air_humidity": {
+            break;
+          }
+          case "sun_incidence": {
+            break;
+          }
+
+        }
+
+        //Adicionar condicionais que verificam as variáveis ideais da estufa e setam os atuadores de acordo
+      }
+    }
   }
 
   // Arranjo para evitar o time drift
@@ -203,45 +179,41 @@ class App {
     }
   }
 
-  private getLoadedBoardById(boardId: string) {
-    for (let board of this.boards) {
-      if (board.id == boardId) {
-        return board;
-      }
-    }
-    return null;
-  }
-
-  private getLoadedSensor(boardId: string, pin: number) {
-    for (let board of this.boards) {
-      if (board.id == boardId) {
-        for (let sensor of board.sensors) {
-          if (sensor.pin == pin) {
-            return sensor;
-          }
-        }
-      }
+  private processPayload(payload: string) {
+    const splitInput = payload.split('/');
+    return {
+      pin: Number(splitInput[0]),
+      cmd: splitInput[1],
+      reading: Number(splitInput[2])
     }
   }
 
-  private getLoadedActuator(boardId: string, pin: number) {
-    for (let board of this.boards) {
-      if (board.id == boardId) {
-        for (let actuator of board.actuators) {
-          if (actuator.pin == pin) {
-            return actuator;
-          }
-        }
+  private hasActuatorCmd(payload: string) {
+    return payload.split('/').length == 2;
+  }
+
+  private hasSensorReading(payload: string) {
+    return payload.split('/').length == 3;
+  }
+
+  private getLoadedSensor(pin: number) {
+    for (let sensor of this.sensors) {
+      if (sensor.pin == pin) {
+        return sensor;
       }
     }
   }
 
-  private getLoadedGreenhouse(greenhouseId: string) {
-    for (let greenhouse of this.greenhouses) {
-      if (greenhouse.id == greenhouseId) {
-        return greenhouse;
+  private getLoadedActuator(pin: number) {
+    for (let actuator of this.actuators) {
+      if (actuator.pin == pin) {
+        return actuator;
       }
     }
+  }
+
+  private toggleActuator(actuator: Actuator) {
+    //let loadedActuator = this.getLoadedActuator(this.selectedBoardId, parseInt
   }
 }
 

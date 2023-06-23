@@ -1,3 +1,5 @@
+import { Types } from 'mongoose';
+
 interface Sensor {
   id: string;
   pin: number;
@@ -5,6 +7,8 @@ interface Sensor {
   lastValue?: number;
   sensorType: string;
   idealValue: number;
+  board: Types.ObjectId,
+  greenhouse: Types.ObjectId,
 };
 
 export default Sensor;

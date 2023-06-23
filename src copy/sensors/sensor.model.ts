@@ -7,6 +7,14 @@ const sensorSchema = new mongoose.Schema<Sensor>({
   lastValue: { type: Number, default: 0 },
   sensorType: { type: String, required: true },
   idealValue: { type: Number, required: true },
+  board: {
+    ref: 'Board',
+    type: mongoose.Schema.Types.ObjectId,
+  },
+  greenhouse: {
+    ref: 'Greenhouse',
+    type: mongoose.Schema.Types.ObjectId,
+  },
 }, { 
   timestamps: true 
 });
