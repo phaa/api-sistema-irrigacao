@@ -2,7 +2,7 @@ interface Actuator {
   id: string;
   pin: number;
   description: string;
-  lastValue?: number;
+  lastValue?: string;
   actuatorType: string;
 };
 
