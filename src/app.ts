@@ -97,28 +97,30 @@ class App {
     const payload = payloadBinary.toString();
     const params = this.processPayload(payload)
 
-    if (this.hasActuatorCmd(payload)) {
-      const actuator = this.getLoadedActuator(params.pin);
-      actuator.lastValue = params.cmd;
+    if (topic == this.inputTopic) {
+      if (this.hasActuatorCmd(payload)) {
+        const actuator = this.getLoadedActuator(params.pin);
+        actuator.lastValue = params.cmd;
 
-      // Atualiza no banco de dados
-      await ActuatorModel.findByIdAndUpdate(actuator.id, { lastValue: actuator.lastValue }, { new: true });
-    }
-    else if (this.hasSensorReading(payload)) {
-      const sensor = this.getLoadedSensor(params.pin);
-      sensor.lastValue = params.reading;
-
-      // Atualiza no banco de dados
-      await SensorModel.findByIdAndUpdate(sensor.id, { lastValue: sensor.lastValue }, { new: true });
-
-      // Recupera o atuador para aquele tipo de dado proveniente 
-      // do sensor e decide se liga ou não o atuador
-      const actuatorType = this.getActuatorFromSensor(sensor.sensorType);
-      if (sensor.lastValue < sensor.idealValue) {
-        this.toggleActuator(actuatorType, 'HIGH')
+        // Atualiza no banco de dados
+        await ActuatorModel.findByIdAndUpdate(actuator.id, { lastValue: actuator.lastValue }, { new: true });
       }
-      else if (sensor.lastValue >= sensor.idealValue + 10) {
-        this.toggleActuator(actuatorType, 'LOW')
+      else if (this.hasSensorReading(payload)) {
+        const sensor = this.getLoadedSensor(params.pin);
+        sensor.lastValue = params.reading;
+
+        // Atualiza no banco de dados
+        await SensorModel.findByIdAndUpdate(sensor.id, { lastValue: sensor.lastValue }, { new: true });
+
+        // Recupera o atuador para aquele tipo de dado proveniente 
+        // do sensor e decide se liga ou não o atuador
+        const actuatorType = this.getActuatorFromSensor(sensor.sensorType);
+        if (sensor.lastValue < sensor.idealValue) {
+          this.toggleActuator(actuatorType, 'HIGH')
+        }
+        else if (sensor.lastValue >= sensor.idealValue + 10) {
+          this.toggleActuator(actuatorType, 'LOW')
+        }
       }
     }
   }
@@ -203,13 +205,14 @@ class App {
   }
 
   private getActuatorFromSensor(sensorType: string) {
+    // retorna um tipo de atuador para as entradas de cada tipo de sensor
     switch (sensorType) {
       case 'soil_moisture': {
         return 'main_pump';
       }
       case 'air_temperature': {
         return 'exaust';
-      }
+      } 
       /**case 'air_humidity': {
         return 'sprinkler';
         break;
@@ -228,7 +231,7 @@ class App {
     const loadedActuator = this.getLoadedActuatorByType(actuatorType);
     this.mqttClient.publish(this.inputTopic, `${state}:${loadedActuator.pin}`);
   }
-  
+
 }
 
 export default App;
