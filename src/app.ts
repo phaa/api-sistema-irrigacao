@@ -22,12 +22,14 @@ class App {
   private sensors!: Sensor[];
   private actuators!: Actuator[];
 
-  private inputTopic!: 'esp32/placa/input';
-  private outputTopic!: 'esp32/placa/output';
+  private inputTopic: string;
+  private outputTopic: string;
 
   constructor(controllers: Controller[]) {
     this.app = express();
     this.controllers = controllers;
+    this.inputTopic = 'esp32/placa/input';
+    this.outputTopic = 'esp32/placa/output';
   }
 
   public async initialize() {
@@ -148,12 +150,12 @@ class App {
   private async mqttLoop() {
     // console.log(this.boards)
     // pedir o estado de todos os pinos que estão sendo utilizados em cada mcu
-    for (let board of this.boards) {
+    /* for (let board of this.boards) {
       for (let sensor of board.sensors) {
         this.mqttClient.publish(`placa/${board.id}/input`, `reading:${sensor.pin}`);
         //console.log(`Publicou 'reading:${sensor.pin}' no tópico 'placa/${board.id}/command'`);
       }
-    }
+    } */
   }
 
   private processPayload(payload: string) {
