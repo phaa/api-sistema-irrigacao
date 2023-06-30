@@ -156,6 +156,9 @@ class App {
         //console.log(`Publicou 'reading:${sensor.pin}' no tópico 'placa/${board.id}/command'`);
       }
     } */
+
+
+    // a cada 10s vai 
   }
 
   private processPayload(payload: string) {

@@ -2,10 +2,12 @@ import { Router, Request, Response, RequestHandler } from 'express';
 import Controller from '../interfaces/controller.interface';
 import Actuator from './actuator.interface';
 import ActuatorModel from './actuator.model';
+import { MqttClient } from 'mqtt';
 
 class ActuatorController implements Controller {
   public path = '/actuators';
   public router = Router();
+  public mqttClient!: MqttClient;
   private actuator = ActuatorModel;
 
   constructor() {
@@ -72,6 +74,7 @@ class ActuatorController implements Controller {
   private deleteActuator: RequestHandler = async (req: Request, res: Response) => {
     try {
       const id = req.params.id;
+      // adicionar verificação: se o atuador estiver em uso, proibir a deleção
       const actuator = await this.actuator.findByIdAndDelete(id);
       return res.status(200).json({ message: `Atuador <<${actuator?.id}>> deletado com sucesso` });
     }
