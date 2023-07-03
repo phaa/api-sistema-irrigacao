@@ -4,7 +4,7 @@ import Actuator from './actuator.interface';
 const actuatorSchema = new mongoose.Schema<Actuator>({
   pin: { type: Number, required: true },
   description: { type: String, required: true },
-  lastValue: { type: String, default: 'off' },
+  value: { type: String, default: 'off' },
   actuatorType: { type: String, required: true },
 }, { 
   timestamps: true 

@@ -7,10 +7,13 @@ import { MqttClient } from 'mqtt';
 class ActuatorController implements Controller {
   public path = '/actuators';
   public router = Router();
-  public mqttClient!: MqttClient;
   private actuator = ActuatorModel;
+  public mqttClient: MqttClient;
+  public outputTopic: string;
 
-  constructor() {
+  constructor(mqttClient: MqttClient, outputTopic: string) {
+    this.mqttClient = mqttClient;
+    this.outputTopic = outputTopic;
     this.initializeRoutes();
   }
 
@@ -23,6 +26,7 @@ class ActuatorController implements Controller {
     this.router.patch(`${this.path}/:id`, this.modifyActuator);
     this.router.delete(`${this.path}/:id`, this.deleteActuator);
     this.router.post(this.path, this.createActuator);
+    this.router.post(`${this.path}/toggle-actuator/:id`, this.toggleActuator);
   }
 
   private getAllActuators: RequestHandler = async (req: Request, res: Response) => {
@@ -77,6 +81,19 @@ class ActuatorController implements Controller {
       // adicionar verificação: se o atuador estiver em uso, proibir a deleção
       const actuator = await this.actuator.findByIdAndDelete(id);
       return res.status(200).json({ message: `Atuador <<${actuator?.id}>> deletado com sucesso` });
+    }
+    catch (error: any) {
+      return res.status(500).json({ message: error.message });
+    }
+  }
+
+  private toggleActuator: RequestHandler = async (req: Request, res: Response) => {
+    try {
+      const id = req.params.id;
+      const actuatorData: Actuator = req.body;
+      this.mqttClient.publish(this.outputTopic, `${actuatorData.value}:${actuatorData.pin}`);
+      const actuator = await this.actuator.findByIdAndUpdate(id, actuatorData, { new: true });
+      return res.status(200).json({ actuator: actuator });
     }
     catch (error: any) {
       return res.status(500).json({ message: error.message });

@@ -2,7 +2,7 @@ interface Sensor {
   id: string;
   pin: number;
   description: string;
-  lastValue?: number;
+  value?: number;
   sensorType: string;
   idealValue: number;
 };

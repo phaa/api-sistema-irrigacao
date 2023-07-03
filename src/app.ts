@@ -13,23 +13,24 @@ import ActuatorModel from './actuators/actuator.model';
 
 // Controllers
 import Controller from './interfaces/controller.interface';
+import UserController from './users/users.controller';
+import SensorController from './sensors/sensor.controller';
+import ActuatorController from './actuators/actuator.controller';
 
 class App {
   // Varáveis de classe 
   private app: express.Application;
   private mqttClient!: MqttClient;
-  private controllers: Controller[];
   private sensors!: Sensor[];
   private actuators!: Actuator[];
 
-  private inputTopic: string;
-  private outputTopic: string;
+  private serverInput: string;
+  private boardInput: string;
 
-  constructor(controllers: Controller[]) {
+  constructor() {
     this.app = express();
-    this.controllers = controllers;
-    this.inputTopic = 'esp32/placa/input';
-    this.outputTopic = 'esp32/placa/output';
+    this.serverInput = 'esp32/server/input';
+    this.boardInput = 'esp32/placa/input';
   }
 
   public async initialize() {
@@ -39,12 +40,14 @@ class App {
     await this.connectDatabase();
     await this.syncToDatabase();
 
+    // Configura mqtt
+    this.configureMqtt();
+    this.configureMqttLoop();
+
     // Executa demais funções inicializadoras
     this.initExpress();
     this.initializeMiddlewares();
     this.initializeControllers();
-    this.configureMqtt();
-    this.configureMqttLoop();
   }
 
   private initExpress() {
@@ -59,7 +62,12 @@ class App {
   }
 
   private initializeControllers() {
-    this.controllers.forEach((controller) => {
+    const controllers = [
+      new UserController(),
+      new SensorController(),
+      new ActuatorController(this.mqttClient, this.boardInput),
+    ];
+    controllers.forEach((controller) => {
       this.app.use('/', controller.router);
     });
   }
@@ -88,8 +96,8 @@ class App {
       console.log(`Conectado com sucesso ao broker: ${MQTT_BROKER_URL}`);
     });
 
-    this.mqttClient.subscribe(this.outputTopic, () => {
-      console.log(`Inscrito no tópico ${this.outputTopic}`)
+    this.mqttClient.subscribe(this.boardInput, () => {
+      console.log(`Inscrito no tópico ${this.boardInput}`)
     });
 
     this.mqttClient.on('message', this.handleMqttLoop);
@@ -99,31 +107,36 @@ class App {
     const payload = payloadBinary.toString();
     const params = this.processPayload(payload)
 
-    if (topic == this.inputTopic) {
-      if (this.hasActuatorCmd(payload)) {
-        const actuator = this.getLoadedActuator(params.pin);
-        actuator.lastValue = params.cmd;
+    try {
+      if (topic == this.serverInput) {
+        if (this.hasActuatorCmd(payload)) {
+          const actuator = this.getLoadedActuator(params.pin);
+          actuator.value = params.cmd;
 
-        // Atualiza no banco de dados
-        await ActuatorModel.findByIdAndUpdate(actuator.id, { lastValue: actuator.lastValue }, { new: true });
-      }
-      else if (this.hasSensorReading(payload)) {
-        const sensor = this.getLoadedSensor(params.pin);
-        sensor.lastValue = params.reading;
-
-        // Atualiza no banco de dados
-        await SensorModel.findByIdAndUpdate(sensor.id, { lastValue: sensor.lastValue }, { new: true });
-
-        // Recupera o atuador para aquele tipo de dado proveniente 
-        // do sensor e decide se liga ou não o atuador
-        const actuatorType = this.getActuatorFromSensor(sensor.sensorType);
-        if (sensor.lastValue < sensor.idealValue) {
-          this.toggleActuator(actuatorType, 'HIGH')
+          // Atualiza no banco de dados
+          await ActuatorModel.findByIdAndUpdate(actuator.id, { lastValue: actuator.value }, { new: true });
         }
-        else if (sensor.lastValue >= sensor.idealValue + 10) {
-          this.toggleActuator(actuatorType, 'LOW')
+        else if (this.hasSensorReading(payload)) {
+          const sensor = this.getLoadedSensor(params.pin);
+          sensor.value = params.reading;
+
+          // Atualiza no banco de dados
+          await SensorModel.findByIdAndUpdate(sensor.id, { lastValue: sensor.value }, { new: true });
+
+          // Recupera o atuador para aquele tipo de dado proveniente 
+          // do sensor e decide se liga ou não o atuador
+          const actuatorType = this.getActuatorFromSensor(sensor.sensorType);
+          if (sensor.value < sensor.idealValue) {
+            this.toggleActuator(actuatorType, 'HIGH')
+          }
+          else if (sensor.value >= sensor.idealValue + 10) {
+            this.toggleActuator(actuatorType, 'LOW')
+          }
         }
       }
+    } 
+    catch (err) {
+      console.log(err)
     }
   }
 
@@ -213,19 +226,17 @@ class App {
     // retorna um tipo de atuador para as entradas de cada tipo de sensor
     switch (sensorType) {
       case 'soil_moisture': {
-        return 'main_pump';
+        return 'watering';
       }
       case 'air_temperature': {
         return 'exaust';
-      } 
-      /**case 'air_humidity': {
+      }
+      case 'air_humidity': {
         return 'sprinkler';
-        break;
       }
       case 'sun_incidence': {
         return 'sun_cover';
-        break;
-      }*/
+      }
       default: {
         throw new TypeError('Não há esse tipo de sensor');
       }
@@ -234,7 +245,7 @@ class App {
 
   private toggleActuator(actuatorType: string, state: string) {
     const loadedActuator = this.getLoadedActuatorByType(actuatorType);
-    this.mqttClient.publish(this.inputTopic, `${state}:${loadedActuator.pin}`);
+    this.mqttClient.publish(this.boardInput, `${state}:${loadedActuator.pin}`);
   }
 
 }

@@ -4,7 +4,7 @@ import Sensor from './sensor.interface';
 const sensorSchema = new mongoose.Schema<Sensor>({
   pin: { type: Number, required: true },
   description: { type: String, required: true },
-  lastValue: { type: Number, default: 0 },
+  value: { type: Number, default: 0 },
   sensorType: { type: String, required: true },
   idealValue: { type: Number, required: true },
 }, { 
