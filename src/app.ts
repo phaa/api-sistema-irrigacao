@@ -35,6 +35,7 @@ class App {
 
   public async initialize() {
     this.mqttLoop = this.mqttLoop.bind(this);
+    this.handleMqttLoop = this.handleMqttLoop.bind(this);
 
     // Aguarda o sistema conectar com o Mongo
     await this.connectDatabase();
@@ -96,16 +97,24 @@ class App {
       console.log(`Conectado com sucesso ao broker: ${MQTT_BROKER_URL}`);
     });
 
-    this.mqttClient.subscribe(this.boardInput, () => {
-      console.log(`Inscrito no tópico ${this.boardInput}`)
+    this.mqttClient.subscribe(this.serverInput, () => {
+      console.log(`Inscrito no tópico ${this.serverInput}`)
     });
 
     this.mqttClient.on('message', this.handleMqttLoop);
+
+   /*  this.mqttClient.on("message", function (topic, message) {
+      // message is Buffer
+      console.log(message.toString());
+      //client.end();
+    }); */
   }
 
   private async handleMqttLoop(topic: string, payloadBinary: Buffer) {
     const payload = payloadBinary.toString();
-    const params = this.processPayload(payload)
+    const params = this.processPayload(payload);
+
+    console.log(params)
 
     try {
       if (topic == this.serverInput) {
@@ -114,14 +123,14 @@ class App {
           actuator.value = params.cmd;
 
           // Atualiza no banco de dados
-          await ActuatorModel.findByIdAndUpdate(actuator.id, { lastValue: actuator.value }, { new: true });
+          await ActuatorModel.findByIdAndUpdate(actuator.id, { value: actuator.value }, { new: true });
         }
         else if (this.hasSensorReading(payload)) {
           const sensor = this.getLoadedSensor(params.pin);
           sensor.value = params.reading;
 
           // Atualiza no banco de dados
-          await SensorModel.findByIdAndUpdate(sensor.id, { lastValue: sensor.value }, { new: true });
+          await SensorModel.findByIdAndUpdate(sensor.id, { value: sensor.value }, { new: true });
 
           // Recupera o atuador para aquele tipo de dado proveniente 
           // do sensor e decide se liga ou não o atuador
@@ -138,6 +147,10 @@ class App {
     catch (err) {
       console.log(err)
     }
+  }
+
+  private handleSensorReading() {
+    
   }
 
   // Arranjo para evitar o time drift
@@ -246,6 +259,7 @@ class App {
   private toggleActuator(actuatorType: string, state: string) {
     const loadedActuator = this.getLoadedActuatorByType(actuatorType);
     this.mqttClient.publish(this.boardInput, `${state}:${loadedActuator.pin}`);
+    console.log(`${loadedActuator.description} ${loadedActuator.pin}: ${state}`)
   }
 
 }
