@@ -16,6 +16,7 @@ import Controller from './interfaces/controller.interface';
 import UserController from './users/users.controller';
 import SensorController from './sensors/sensor.controller';
 import ActuatorController from './actuators/actuator.controller';
+import { Payload } from './interfaces/payload.interface';
 
 class App {
   // Varáveis de classe 
@@ -102,55 +103,70 @@ class App {
     });
 
     this.mqttClient.on('message', this.handleMqttLoop);
-
-   /*  this.mqttClient.on("message", function (topic, message) {
-      // message is Buffer
-      console.log(message.toString());
-      //client.end();
-    }); */
   }
 
   private async handleMqttLoop(topic: string, payloadBinary: Buffer) {
-    const payload = payloadBinary.toString();
-    const params = this.processPayload(payload);
+    const payload = this.processPayload(payloadBinary);
 
-    console.log(params)
+    if (topic == this.serverInput) {
+      if (payload.fromActuator) {
+        await this.handleActuatorReading(payload);
+      }
+      else if (payload.fromSensor) {
+        await this.handleSensorReading(payload);
+      }
+    }
+  }
 
+  private async handleSensorReading(payload: Payload) {
     try {
-      if (topic == this.serverInput) {
-        if (this.hasActuatorCmd(payload)) {
-          const actuator = this.getLoadedActuator(params.pin);
-          actuator.value = params.cmd;
+      const sensor = this.getLoadedSensor(payload.pin);
 
-          // Atualiza no banco de dados
-          await ActuatorModel.findByIdAndUpdate(actuator.id, { value: actuator.value }, { new: true });
+      // Atualiza no banco de dados
+      await SensorModel.findByIdAndUpdate(sensor.id, { value: payload.reading }, { new: true });
+      sensor.value = payload.reading;
+
+      // Recupera o atuador para aquele tipo de dado proveniente
+      const actuatorType = this.getActuatorForSensor(sensor.sensorType);
+
+      // Lógica para irrigação e asperção: Menor valor de sensor = acionamento
+      let state = '';
+      if (actuatorType == "watering" || actuatorType == "sprinkler") {
+        if (sensor.value < sensor.idealValue - sensor.threshold) {
+          state = 'HIGH';
         }
-        else if (this.hasSensorReading(payload)) {
-          const sensor = this.getLoadedSensor(params.pin);
-          sensor.value = params.reading;
-
-          // Atualiza no banco de dados
-          await SensorModel.findByIdAndUpdate(sensor.id, { value: sensor.value }, { new: true });
-
-          // Recupera o atuador para aquele tipo de dado proveniente 
-          // do sensor e decide se liga ou não o atuador
-          const actuatorType = this.getActuatorFromSensor(sensor.sensorType);
-          if (sensor.value < sensor.idealValue) {
-            this.toggleActuator(actuatorType, 'HIGH')
-          }
-          else if (sensor.value >= sensor.idealValue + 10) {
-            this.toggleActuator(actuatorType, 'LOW')
-          }
+        else if (sensor.value >= sensor.idealValue + sensor.threshold) {
+          state = 'LOW';
         }
       }
-    } 
+      // Lógica para exaustão e cobertura: Maior valor de sensor = acionamento
+      else if (actuatorType == "exaust" || actuatorType == "sun_cover") {
+        if (sensor.value >= sensor.idealValue + sensor.threshold) {
+          state = 'HIGH';
+        }
+        else if (sensor.value < sensor.idealValue - sensor.threshold) {
+          state = 'LOW';
+        }
+      }
+
+      this.toggleActuator(actuatorType, state);
+    }
     catch (err) {
       console.log(err)
     }
   }
 
-  private handleSensorReading() {
-    
+  private async handleActuatorReading(payload: Payload) {
+    try {
+      const actuator = this.getLoadedActuator(payload.pin);
+      actuator.value = payload.cmd;
+
+      // Atualiza no banco de dados
+      await ActuatorModel.findByIdAndUpdate(actuator.id, { value: actuator.value }, { new: true });
+    }
+    catch (err) {
+      console.log(err)
+    }
   }
 
   // Arranjo para evitar o time drift
@@ -174,8 +190,7 @@ class App {
   }
 
   private async mqttLoop() {
-    // console.log(this.boards)
-    // pedir o estado de todos os pinos que estão sendo utilizados em cada mcu
+    //pedir leitura de cada sensor cadastrado
     /* for (let board of this.boards) {
       for (let sensor of board.sensors) {
         this.mqttClient.publish(`placa/${board.id}/input`, `reading:${sensor.pin}`);
@@ -187,22 +202,20 @@ class App {
     // a cada 10s vai 
   }
 
-  private processPayload(payload: string) {
+  private processPayload(payloadBinary: Buffer) {
     // pin/cmd/value? | 10/a/78.0 | 10/on | 10/off
+    const payload = payloadBinary.toString();
     const splitInput = payload.split('/');
-    return {
+
+    const processedPayload: Payload = {
       pin: Number(splitInput[0]),
       cmd: splitInput[1],
-      reading: Number(splitInput[2])
-    }
-  }
+      reading: Number(splitInput[2]) | 0,
+      fromSensor: payload.split('/').length == 3,
+      fromActuator: payload.split('/').length == 2
+    };
 
-  private hasActuatorCmd(payload: string) {
-    return payload.split('/').length == 2;
-  }
-
-  private hasSensorReading(payload: string) {
-    return payload.split('/').length == 3;
+    return processedPayload;
   }
 
   private getLoadedSensor(pin: number) {
@@ -225,6 +238,12 @@ class App {
     return actuators;
   }
 
+  private toggleActuator(actuatorType: string, state: string) {
+    const loadedActuator = this.getLoadedActuatorByType(actuatorType);
+    this.mqttClient.publish(this.boardInput, `${state}:${loadedActuator.pin}`);
+    console.log(`${loadedActuator.description} ${loadedActuator.pin}: ${state}`)
+  }
+
   private getLoadedActuatorByType(actuatorType: string) {
     const actuators = this.actuators.find(actuator => actuator.actuatorType == actuatorType);
 
@@ -235,7 +254,7 @@ class App {
     return actuators;
   }
 
-  private getActuatorFromSensor(sensorType: string) {
+  private getActuatorForSensor(sensorType: string) {
     // retorna um tipo de atuador para as entradas de cada tipo de sensor
     switch (sensorType) {
       case 'soil_moisture': {
@@ -255,13 +274,6 @@ class App {
       }
     }
   }
-
-  private toggleActuator(actuatorType: string, state: string) {
-    const loadedActuator = this.getLoadedActuatorByType(actuatorType);
-    this.mqttClient.publish(this.boardInput, `${state}:${loadedActuator.pin}`);
-    console.log(`${loadedActuator.description} ${loadedActuator.pin}: ${state}`)
-  }
-
 }
 
 export default App;
