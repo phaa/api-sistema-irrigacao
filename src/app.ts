@@ -197,16 +197,10 @@ class App {
   }
 
   private async mqttLoop() {
-    //pedir leitura de cada sensor cadastrado
-    /* for (let board of this.boards) {
-      for (let sensor of board.sensors) {
-        this.mqttClient.publish(`placa/${board.id}/input`, `reading:${sensor.pin}`);
-        //console.log(`Publicou 'reading:${sensor.pin}' no tópico 'placa/${board.id}/command'`);
-      }
-    } */
-
-
-    // a cada 10s vai 
+    for (let sensor of this.sensors) {
+      this.mqttClient.publish(this.boardInput, `read:${sensor.pin}`);
+      console.log(`Solicitando leitura do sensor '${sensor.description}' | Pino:${sensor.pin} | Id: ${sensor.id}`);
+    }
   }
 
   private processPayload(payloadBinary: Buffer) {
