@@ -52,19 +52,19 @@ void connectEthernet() {
 }
 
 void callback(char* topic, byte* payload, unsigned int length) {
-  /* Serial.print("Mensagem recebida [");
+  Serial.print("Mensagem recebida [");
   Serial.print(topic);
-  Serial.print("] "); */
+  Serial.print("] ");
 
   // Monta uma string com os bytes recebidos
   String inputString;
   for (int i = 0; i < length; i++) {
-    //Serial.print((char)payload[i]);
+    Serial.print((char)payload[i]);
     inputString += (char)payload[i];
   }
-  //Serial.println();
+  Serial.println();
 
-  if (topic == inputTopic) {
+  if (String(topic) == "esp32/placa/input") {
     //Serial2.println(inputString);
 
     // exemplo do comando:
@@ -86,19 +86,20 @@ void callback(char* topic, byte* payload, unsigned int length) {
     } 
     else if (cmd.equals("LOW")) {
       digitalWrite(pin, LOW);
-      response = String(pin) + "/OFF";
+      response = String(pin) + "/LOW";
     } 
     else if (cmd.equals("HIGH")) {
       digitalWrite(pin, HIGH);
-      response = String(pin) + "/ON";
+      response = String(pin) + "/HIGH";
     }
 
+Serial.println(response);
     int strLen = response.length() + 1;
     char charArray[strLen];
     response.toCharArray(charArray, strLen);
 
     client.publish(outputTopic, charArray);
-    Serial.println(charArray);
+    
   }
 }
 

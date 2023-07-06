@@ -91,9 +91,13 @@ class ActuatorController implements Controller {
     try {
       const id = req.params.id;
       const actuatorData: Actuator = req.body;
-      this.mqttClient.publish(this.outputTopic, `${actuatorData.value}:${actuatorData.pin}`);
-      const actuator = await this.actuator.findByIdAndUpdate(id, actuatorData, { new: true });
-      return res.status(200).json({ actuator: actuator });
+      const actuator = await this.actuator.findById(id);
+      if (actuator) {
+        this.mqttClient.publish(this.outputTopic, `${actuatorData.value}:${actuator.pin}`);
+        const actuatorUpdata = await this.actuator.findByIdAndUpdate(id, actuatorData, { new: true });
+        return res.status(200).json({ actuator: actuatorUpdata });
+      }
+      
     }
     catch (error: any) {
       return res.status(500).json({ message: error.message });
