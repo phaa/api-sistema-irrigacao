@@ -1,4 +1,3 @@
-
 #include <SPI.h>
 #include <Ethernet.h>
 #include <PubSubClient.h>
@@ -16,6 +15,10 @@ PubSubClient client(ethClient);
 
 void setup() {
   Serial.begin(9600);
+
+  for (int pin = 2; pin <= 53; pin++) {
+    pinMode(pin, OUTPUT);
+  }
 
   connectEthernet();
 
@@ -49,20 +52,20 @@ void connectEthernet() {
 }
 
 void callback(char* topic, byte* payload, unsigned int length) {
-  Serial.print("Mensagem recebida [");
+  /* Serial.print("Mensagem recebida [");
   Serial.print(topic);
-  Serial.print("] ");
+  Serial.print("] "); */
 
   // Monta uma string com os bytes recebidos
   String inputString;
   for (int i = 0; i < length; i++) {
-    Serial.print((char)payload[i]);
+    //Serial.print((char)payload[i]);
     inputString += (char)payload[i];
   }
-  Serial.println();
+  //Serial.println();
 
   if (topic == inputTopic) {
-    Serial2.println(inputString);
+    //Serial2.println(inputString);
 
     // exemplo do comando:
     // A:15 leitura analógica da porta 15
@@ -72,19 +75,30 @@ void callback(char* topic, byte* payload, unsigned int length) {
     String cmd = inputString.substring(0, cmdIndex);
     uint8_t pin = inputString.substring(cmdIndex + 1, inputString.length()).toInt();
 
+    // pin/cmd/value? | 10/a/78.0 | 10/on | 10/off
+    String response = "";
     if (cmd.equals("READ")) {
       // A0 = GPIO 54 e A15 = GPIO 69
       if (pin >= 54 && pin <= 69) {
         Serial.println(analogRead(pin));
-        //client.publish(outputTopic, "");
+        response = String(pin) + "/a/" + String(30);
       }
-    }
+    } 
     else if (cmd.equals("LOW")) {
       digitalWrite(pin, LOW);
-    }
+      response = String(pin) + "/OFF";
+    } 
     else if (cmd.equals("HIGH")) {
       digitalWrite(pin, HIGH);
+      response = String(pin) + "/ON";
     }
+
+    int strLen = response.length() + 1;
+    char charArray[strLen];
+    response.toCharArray(charArray, strLen);
+
+    client.publish(outputTopic, charArray);
+    Serial.println(charArray);
   }
 }
 
