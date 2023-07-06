@@ -198,7 +198,7 @@ class App {
 
   private async mqttLoop() {
     for (let sensor of this.sensors) {
-      this.mqttClient.publish(this.boardInput, `read:${sensor.pin}`);
+      this.mqttClient.publish(this.boardInput, `READ:${sensor.pin}`);
       console.log(`Solicitando leitura do sensor '${sensor.description}' | Pino:${sensor.pin} | Id: ${sensor.id}`);
     }
   }
@@ -219,6 +219,22 @@ class App {
     return processedPayload;
   }
 
+  private toggleActuator(actuatorType: string, state: string) {
+    const loadedActuator = this.getLoadedActuatorByType(actuatorType);
+    this.mqttClient.publish(this.boardInput, `${state}:${loadedActuator.pin}`);
+    console.log(`${loadedActuator.description} ${loadedActuator.pin}: ${state}`)
+  }
+
+  private getLoadedActuatorByType(actuatorType: string) {
+    const actuators = this.actuators.find(actuator => actuator.actuatorType == actuatorType);
+
+    if (actuators === undefined) {
+      throw new TypeError('Não há atuador desse tipo');
+    }
+
+    return actuators;
+  }
+
   private getLoadedSensor(pin: number) {
     const sensors = this.sensors.find(sensor => sensor.pin == pin);
 
@@ -234,22 +250,6 @@ class App {
 
     if (actuators === undefined) {
       throw new TypeError('Não há atuador nesse pino');
-    }
-
-    return actuators;
-  }
-
-  private toggleActuator(actuatorType: string, state: string) {
-    const loadedActuator = this.getLoadedActuatorByType(actuatorType);
-    this.mqttClient.publish(this.boardInput, `${state}:${loadedActuator.pin}`);
-    console.log(`${loadedActuator.description} ${loadedActuator.pin}: ${state}`)
-  }
-
-  private getLoadedActuatorByType(actuatorType: string) {
-    const actuators = this.actuators.find(actuator => actuator.actuatorType == actuatorType);
-
-    if (actuators === undefined) {
-      throw new TypeError('Não há atuador desse tipo');
     }
 
     return actuators;
