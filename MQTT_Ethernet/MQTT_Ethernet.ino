@@ -1,6 +1,7 @@
 #include <SPI.h>
 #include <Ethernet.h>
 #include <PubSubClient.h>
+#include <DFRobot_DHT11.h>
 
 // Ethernet
 byte mac[] = { 0x00, 0xAA, 0xBB, 0xCC, 0xDE, 0x02 };
@@ -11,6 +12,10 @@ const char* mqttServer = "10.44.1.35";
 const char* inputTopic = "esp32/placa/input";
 const char* outputTopic = "esp32/server/input";
 PubSubClient client(ethClient);
+
+// Sensores
+DFRobot_DHT11 DHT;
+#define DHT11_PIN 54
 
 
 void setup() {
@@ -28,6 +33,8 @@ void setup() {
 }
 
 void loop() {
+  DHT.read(DHT11_PIN);
+
   if (!client.connected()) {
     reconnect();
   }
@@ -65,8 +72,6 @@ void callback(char* topic, byte* payload, unsigned int length) {
   Serial.println();
 
   if (String(topic) == "esp32/placa/input") {
-    //Serial2.println(inputString);
-
     // exemplo do comando:
     // A:15 leitura analógica da porta 15
     // HIGH:2 ligar pino 2
@@ -82,24 +87,25 @@ void callback(char* topic, byte* payload, unsigned int length) {
       if (pin >= 54 && pin <= 69) {
         Serial.println(analogRead(pin));
         response = String(pin) + "/a/" + String(30);
+        Serial.print("temp:");
+        Serial.print(DHT.temperature);
+        Serial.print("  humi:");
+        Serial.println(DHT.humidity);
       }
-    } 
-    else if (cmd.equals("LOW")) {
+    } else if (cmd.equals("LOW")) {
       digitalWrite(pin, LOW);
       response = String(pin) + "/LOW";
-    } 
-    else if (cmd.equals("HIGH")) {
+    } else if (cmd.equals("HIGH")) {
       digitalWrite(pin, HIGH);
       response = String(pin) + "/HIGH";
     }
 
-Serial.println(response);
+    Serial.println(response);
     int strLen = response.length() + 1;
     char charArray[strLen];
     response.toCharArray(charArray, strLen);
 
     client.publish(outputTopic, charArray);
-    
   }
 }
 

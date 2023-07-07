@@ -1,7 +1,9 @@
 import express from 'express';
 import bodyParser from 'body-parser';
 import mongoose from 'mongoose';
+import cors from 'cors';
 import { MqttClient, connect } from 'mqtt';
+
 
 // Interfaces
 import Actuator from './actuators/actuator.interface';
@@ -61,13 +63,14 @@ class App {
 
   private initializeMiddlewares() {
     this.app.use(bodyParser.json());
-    this.app.use((req, res, next) => {
+    this.app.use(cors());
+    /* this.app.use((req, res, next) => {
       res.setHeader('Access-Control-Allow-Origin', '*');
       res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, PATCH, DELETE');
       res.setHeader('Access-Control-Allow-Headers', 'X-Requested-With,content-type');
       res.setHeader('Access-Control-Allow-Credentials', 'true');
       next();
-    });
+    }); */
   }
 
   private initializeControllers() {
