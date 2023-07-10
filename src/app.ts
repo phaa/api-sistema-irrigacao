@@ -143,19 +143,19 @@ class App {
       let state = '';
       if (actuatorType == "watering" || actuatorType == "sprinkler") {
         if (sensor.value < sensor.idealValue - sensor.threshold) {
-          state = 'HIGH';
+          state = 'high';
         }
         else if (sensor.value >= sensor.idealValue + sensor.threshold) {
-          state = 'LOW';
+          state = 'low';
         }
       }
       // Lógica para exaustão e cobertura: Maior valor de sensor = acionamento
       else if (actuatorType == "exaust" || actuatorType == "sun_cover") {
         if (sensor.value >= sensor.idealValue + sensor.threshold) {
-          state = 'HIGH';
+          state = 'high';
         }
         else if (sensor.value < sensor.idealValue - sensor.threshold) {
-          state = 'LOW';
+          state = 'low';
         }
       }
 
@@ -200,10 +200,10 @@ class App {
   }
 
   private async mqttLoop() {
-    for (let sensor of this.sensors) {
+    /* for (let sensor of this.sensors) {
       this.mqttClient.publish(this.boardInput, `${sensor.sensorType}:${sensor.pin}`);
       console.log(`Solicitando leitura '${sensor.description}' | Pino:${sensor.pin} | Id: ${sensor.id}`);
-    }
+    } */
   }
 
   private processPayload(payloadBinary: Buffer) {

@@ -3,7 +3,18 @@
 #include <PubSubClient.h>
 #include <DFRobot_DHT11.h>
 
+// Debug
+#define DEBUG
+#ifdef DEBUG
+#define DEBUG_PRINT(x)  DEBUG_PRINT (x)
+#define DEBUG_PRINTLN(x)  DEBUG_PRINTLN (x)
+#else
+#define DEBUG_PRINT(x)
+#define DEBUG_PRINTLN(x)
+#endif
+
 // Ethernet
+#define ETHERNET_CS_PIN 10
 byte mac[] = { 0x00, 0xAA, 0xBB, 0xCC, 0xDE, 0x02 };
 EthernetClient ethClient;
 
@@ -26,9 +37,7 @@ void setup() {
   }
 
   connectEthernet();
-
-  client.setServer(mqttServer, 1883);
-  client.setCallback(callback);
+  iniMQTT();
 
   // buscar pinos de saída no servidor
   delay(1500);
@@ -43,35 +52,40 @@ void loop() {
   client.loop();
 }
 
-void connectEthernet() {
-  Serial.print("Iniciando conexão Ethernet...");
-
+void initEthernet() {
+  Ethernet.init(CS_PIN);
+  // Inicia a conexão ethernet:
+  DEBUG_PRINTLN("Incializando Ethernet");
   if (Ethernet.begin(mac) == 0) {
-    Serial.println("Ocorreu um problema ao obter um endereço IP");
-    for (;;)
-      ;
+    DEBUG_PRINTLN("Falha ao conseguir endereço via DHCP");
+    if (Ethernet.hardwareStatus() == EthernetNoHardware) {
+      DEBUG_PRINTLN("Módulo ethernet não encontrado.");
+    } else if (Ethernet.linkStatus() == LinkOFF) {
+      DEBUG_PRINTLN("Cabo ethernet não conectado.");
+    }
+    // Daqui em diante não há nada para fazer, então para no loop
+    while (true) {
+      delay(1);
+    }
   }
-
-  Serial.println("IP recebido por DHCP: ");
-  for (byte thisByte = 0; thisByte < 4; thisByte++) {
-    Serial.print(Ethernet.localIP()[thisByte], DEC);
-    Serial.print(".");
-  }
-  Serial.println();
+  // Printa o IP
+  DEBUG_PRINT("IP atribuído: ");
+  DEBUG_PRINTLN(Ethernet.localIP());
 }
 
+
 void callback(char* topic, byte* payload, unsigned int length) {
-  Serial.print("Mensagem recebida [");
-  Serial.print(topic);
-  Serial.print("] ");
+  DEBUG_PRINT("Mensagem recebida [");
+  DEBUG_PRINT(topic);
+  DEBUG_PRINT("] ");
 
   // Monta uma string com os bytes recebidos
   String inputString;
   for (int i = 0; i < length; i++) {
-    Serial.print((char)payload[i]);
+    DEBUG_PRINT((char)payload[i]);
     inputString += (char)payload[i];
   }
-  Serial.println();
+  DEBUG_PRINTLN();
 
   if (String(topic) == "esp32/placa/input") {
     // exemplo do comando:
@@ -86,47 +100,53 @@ void callback(char* topic, byte* payload, unsigned int length) {
     String response = "";
 
     switch (cmd) {
-      case "":
-        digitalWrite(2, HIGH);
+      case "low":
+        response = String(pin) + "/LOW";
         break;
-      case 'b':
-        digitalWrite(3, HIGH);
+      case "high":
+        response = String(pin) + "/HIGH";
+        // retorna leitura de incidência solar
         break;
-      case 'c':
-        digitalWrite(4, HIGH);
+      case "soil_moisture":
+        // retorna leitura do sensor de solo
+        
+        response = String(pin) + "/soil_moisture/" + String();
         break;
-      case 'd':
-        digitalWrite(5, HIGH);
+      case "air_temperature":
+        // retorna leitura do DHT 11.temperatura
         break;
-      case 'e':
-        digitalWrite(6, HIGH);
+      case "air_humidity":
+        // retorna leitura do DHT 11.umidade
         break;
+      case "sun_incidence":
+        // retorna leitura de incidência solar
+        break;
+      // adicionar casos para sensor de fluxo de água
       default:
-        // turn all the LEDs off:
-        for (int thisPin = 2; thisPin < 7; thisPin++) {
-          digitalWrite(thisPin, LOW);
-        }
+        DEBUG_PRINTLN("Não encontrado sensor desse tipo");
     }
 
-    if (cmd.equals("READ")) {
-      // A0 = GPIO 54 e A15 = GPIO 69
-      if (pin >= 54 && pin <= 69) {
-        Serial.println(analogRead(pin));
-        response = String(pin) + "/a/" + String(30);
-        Serial.print("temp:");
-        Serial.print(DHT.temperature);
-        Serial.print("  humi:");
-        Serial.println(DHT.humidity);
-      }
-    } else if (cmd.equals("LOW")) {
+    //    if (cmd.equals("READ")) {
+    //      // A0 = GPIO 54 e A15 = GPIO 69
+    //      if (pin >= 54 && pin <= 69) {
+    //        DEBUG_PRINTLN(analogRead(pin));
+    //        response = String(pin) + "/a/" + String(30);
+    //        DEBUG_PRINT("temp:");
+    //        DEBUG_PRINT(DHT.temperature);
+    //        DEBUG_PRINT("  humi:");
+    //        DEBUG_PRINTLN(DHT.humidity);
+    //      }
+    //    }
+    else if (cmd.equals("LOW")) {
       digitalWrite(pin, LOW);
       response = String(pin) + "/LOW";
-    } else if (cmd.equals("HIGH")) {
+    }
+    else if (cmd.equals("HIGH")) {
       digitalWrite(pin, HIGH);
-      response = String(pin) + "/HIGH";
+
     }
 
-    Serial.println(response);
+    DEBUG_PRINTLN(response);
     int strLen = response.length() + 1;
     char charArray[strLen];
     response.toCharArray(charArray, strLen);
@@ -135,20 +155,27 @@ void callback(char* topic, byte* payload, unsigned int length) {
   }
 }
 
+
+// MQTT
+void initMQTT() {
+  client.setServer(mqttServer, 1883);
+  client.setCallback(callback);
+}
+
 void reconnect() {
   // Repete o loop enquanto não estiver conectado
   while (!client.connected()) {
-    Serial.println("Iniciando conexão MQTT...");
+    DEBUG_PRINTLN("Iniciando conexão MQTT...");
     if (client.connect("arduino-estufa")) {
-      Serial.println("Conexão bem sucedida");
+      DEBUG_PRINTLN("Conexão bem sucedida");
       //client.publish("outTopic", "hello world");
       client.subscribe(inputTopic);
-      Serial.print("Inscrito no tópico: ");
-      Serial.println(inputTopic);
+      DEBUG_PRINT("Inscrito no tópico: ");
+      DEBUG_PRINTLN(inputTopic);
     } else {
-      Serial.print("erro, rc=");
-      Serial.print(client.state());
-      Serial.println(" tentando novamente em 5s");
+      DEBUG_PRINT("erro, rc=");
+      DEBUG_PRINT(client.state());
+      DEBUG_PRINTLN(" tentando novamente em 5s");
       delay(5000);
     }
   }
