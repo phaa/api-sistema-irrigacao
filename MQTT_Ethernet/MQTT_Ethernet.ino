@@ -29,6 +29,8 @@ void setup() {
 
   client.setServer(mqttServer, 1883);
   client.setCallback(callback);
+
+  // buscar pinos de saída no servidor
   delay(1500);
 }
 
@@ -82,6 +84,30 @@ void callback(char* topic, byte* payload, unsigned int length) {
 
     // pin/cmd/value? | 10/a/78.0 | 10/on | 10/off
     String response = "";
+
+    switch (cmd) {
+      case "":
+        digitalWrite(2, HIGH);
+        break;
+      case 'b':
+        digitalWrite(3, HIGH);
+        break;
+      case 'c':
+        digitalWrite(4, HIGH);
+        break;
+      case 'd':
+        digitalWrite(5, HIGH);
+        break;
+      case 'e':
+        digitalWrite(6, HIGH);
+        break;
+      default:
+        // turn all the LEDs off:
+        for (int thisPin = 2; thisPin < 7; thisPin++) {
+          digitalWrite(thisPin, LOW);
+        }
+    }
+
     if (cmd.equals("READ")) {
       // A0 = GPIO 54 e A15 = GPIO 69
       if (pin >= 54 && pin <= 69) {

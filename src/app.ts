@@ -200,10 +200,10 @@ class App {
   }
 
   private async mqttLoop() {
-    /* for (let sensor of this.sensors) {
-      this.mqttClient.publish(this.boardInput, `READ:${sensor.pin}`);
-      console.log(`Solicitando leitura do sensor '${sensor.description}' | Pino:${sensor.pin} | Id: ${sensor.id}`);
-    } */
+    for (let sensor of this.sensors) {
+      this.mqttClient.publish(this.boardInput, `${sensor.sensorType}:${sensor.pin}`);
+      console.log(`Solicitando leitura '${sensor.description}' | Pino:${sensor.pin} | Id: ${sensor.id}`);
+    }
   }
 
   private processPayload(payloadBinary: Buffer) {
