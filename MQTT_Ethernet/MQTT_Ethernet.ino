@@ -6,8 +6,8 @@
 // Debug
 #define DEBUG
 #ifdef DEBUG
-#define DEBUG_PRINT(x)  DEBUG_PRINT (x)
-#define DEBUG_PRINTLN(x)  DEBUG_PRINTLN (x)
+#define DEBUG_PRINT(x) Serial.print(x)
+#define DEBUG_PRINTLN(x) Serial.println(x)
 #else
 #define DEBUG_PRINT(x)
 #define DEBUG_PRINTLN(x)
@@ -26,18 +26,19 @@ PubSubClient client(ethClient);
 
 // Sensores
 DFRobot_DHT11 DHT;
-#define DHT11_PIN 54
+#define DHT11_PIN A0
 
 
 void setup() {
-  Serial.begin(9600);
+  Serial.begin(115200);
 
   for (int pin = 2; pin <= 53; pin++) {
     pinMode(pin, OUTPUT);
+    digitalWrite(pin, HIGH);
   }
 
-  connectEthernet();
-  iniMQTT();
+  initEthernet();
+  initMQTT();
 
   // buscar pinos de saída no servidor
   delay(1500);
@@ -45,6 +46,7 @@ void setup() {
 
 void loop() {
   DHT.read(DHT11_PIN);
+  //salvar temperatura e umidade de forma assincrona e salvar em variavel
 
   if (!client.connected()) {
     reconnect();
@@ -53,14 +55,15 @@ void loop() {
 }
 
 void initEthernet() {
-  Ethernet.init(CS_PIN);
+  Ethernet.init(ETHERNET_CS_PIN);
   // Inicia a conexão ethernet:
-  DEBUG_PRINTLN("Incializando Ethernet");
+  DEBUG_PRINTLN("Incializando Ethernet...");
   if (Ethernet.begin(mac) == 0) {
     DEBUG_PRINTLN("Falha ao conseguir endereço via DHCP");
     if (Ethernet.hardwareStatus() == EthernetNoHardware) {
       DEBUG_PRINTLN("Módulo ethernet não encontrado.");
-    } else if (Ethernet.linkStatus() == LinkOFF) {
+    } 
+    else if (Ethernet.linkStatus() == LinkOFF) {
       DEBUG_PRINTLN("Cabo ethernet não conectado.");
     }
     // Daqui em diante não há nada para fazer, então para no loop
@@ -88,65 +91,59 @@ void callback(char* topic, byte* payload, unsigned int length) {
   DEBUG_PRINTLN();
 
   if (String(topic) == "esp32/placa/input") {
-    // exemplo do comando:
-    // A:15 leitura analógica da porta 15
-    // HIGH:2 ligar pino 2
-    // LOW:2 desligar pino 3
-    uint8_t cmdIndex = inputString.indexOf(":");
-    String cmd = inputString.substring(0, cmdIndex);
-    uint8_t pin = inputString.substring(cmdIndex + 1, inputString.length()).toInt();
+    // 15/sensor_typeleitura analógica da porta 15
+    // 2/HIGH ligar pino 2
+    // 3/LOW desligar pino 3
+    uint8_t dotsIndex = inputString.indexOf("/");
+    
+    // mesmo que não usemos o pino diretamente no arduino, ele serve para identificar 
+    // o sensor/atuador no servidor
+    String stringPin = inputString.substring(0, dotsIndex);
+    uint8_t pin = stringPin.toInt();
 
-    // pin/cmd/value? | 10/a/78.0 | 10/on | 10/off
+    String cmd = inputString.substring(dotsIndex + 1, inputString.length());
+
+    // pin/cmd/value? | 10/a/78.0 | 10/high | 10/low
     String response = "";
-
-    switch (cmd) {
-      case "low":
-        response = String(pin) + "/LOW";
-        break;
-      case "high":
-        response = String(pin) + "/HIGH";
-        // retorna leitura de incidência solar
-        break;
-      case "soil_moisture":
-        // retorna leitura do sensor de solo
-        
-        response = String(pin) + "/soil_moisture/" + String();
-        break;
-      case "air_temperature":
-        // retorna leitura do DHT 11.temperatura
-        break;
-      case "air_humidity":
-        // retorna leitura do DHT 11.umidade
-        break;
-      case "sun_incidence":
-        // retorna leitura de incidência solar
-        break;
-      // adicionar casos para sensor de fluxo de água
-      default:
-        DEBUG_PRINTLN("Não encontrado sensor desse tipo");
-    }
-
-    //    if (cmd.equals("READ")) {
-    //      // A0 = GPIO 54 e A15 = GPIO 69
-    //      if (pin >= 54 && pin <= 69) {
-    //        DEBUG_PRINTLN(analogRead(pin));
-    //        response = String(pin) + "/a/" + String(30);
-    //        DEBUG_PRINT("temp:");
-    //        DEBUG_PRINT(DHT.temperature);
-    //        DEBUG_PRINT("  humi:");
-    //        DEBUG_PRINTLN(DHT.humidity);
-    //      }
-    //    }
-    else if (cmd.equals("LOW")) {
-      digitalWrite(pin, LOW);
-      response = String(pin) + "/LOW";
-    }
-    else if (cmd.equals("HIGH")) {
+    if (cmd.equals("low")) {
+      response = stringPin + "/low";
       digitalWrite(pin, HIGH);
-
+    } 
+    else if (cmd.equals("high")) {
+      response = stringPin + "/high";
+      digitalWrite(pin, LOW);
+    } 
+    else if (cmd.equals("soil_moisture")) {
+      // retorna leitura do sensor de solo
+      response = stringPin + "/soil_moisture/" + String("20");
+    } 
+    else if (cmd.equals("air_temperature")) {
+      // retorna leitura do DHT 11.temperatura
+      response = stringPin + "/air_temperature/" + String(DHT.temperature);
+      DEBUG_PRINTLN("No if de temperatura");
+      DEBUG_PRINTLN(DHT.temperature);
+    } 
+    else if (cmd.equals("air_humidity")) {
+      // retorna leitura do DHT 11.umidade
+      response = stringPin + "/air_humidity/" + String(DHT.humidity);
+      DEBUG_PRINTLN("No if de umidade");
+      DEBUG_PRINTLN(DHT.humidity);
+    } 
+    else if (cmd.equals("sun_incidence")) {
+      // retorna leitura de incidência solar
     }
-
+    else if (cmd.equals("flow")) {
+      // retorna leitura do sensor de fluxo
+      // verifica se a bomba tá ligada
+      // se estiver desligada, mas o sensor tiver leitura, desativa a bomba
+    }
+    else if (cmd.equals("rain")) {
+      // retorna leitura do sensor de chuva
+    }
+    
+    
     DEBUG_PRINTLN(response);
+    //DEBUG_PRINTLN(response);
     int strLen = response.length() + 1;
     char charArray[strLen];
     response.toCharArray(charArray, strLen);
@@ -154,7 +151,6 @@ void callback(char* topic, byte* payload, unsigned int length) {
     client.publish(outputTopic, charArray);
   }
 }
-
 
 // MQTT
 void initMQTT() {
@@ -180,3 +176,16 @@ void reconnect() {
     }
   }
 }
+
+
+//    if (cmd.equals("READ")) {
+//      // A0 = GPIO 54 e A15 = GPIO 69
+//      if (pin >= 54 && pin <= 69) {
+//        DEBUG_PRINTLN(analogRead(pin));
+//        response = String(pin) + "/a/" + String(30);
+//        DEBUG_PRINT("temp:");
+//        DEBUG_PRINT(DHT.temperature);
+//        DEBUG_PRINT("  humi:");
+//        DEBUG_PRINTLN(DHT.humidity);
+//      }
+//    }

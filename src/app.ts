@@ -64,13 +64,6 @@ class App {
   private initializeMiddlewares() {
     this.app.use(bodyParser.json());
     this.app.use(cors());
-    /* this.app.use((req, res, next) => {
-      res.setHeader('Access-Control-Allow-Origin', '*');
-      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, PATCH, DELETE');
-      res.setHeader('Access-Control-Allow-Headers', 'X-Requested-With,content-type');
-      res.setHeader('Access-Control-Allow-Credentials', 'true');
-      next();
-    }); */
   }
 
   private initializeControllers() {
@@ -136,6 +129,8 @@ class App {
       await SensorModel.findByIdAndUpdate(sensor.id, { value: payload.reading }, { new: true });
       sensor.value = payload.reading;
 
+      console.log(`${sensor.description}.value = ${payload.reading}`)
+
       // Recupera o atuador para aquele tipo de dado proveniente
       const actuatorType = this.getActuatorForSensor(sensor.sensorType);
 
@@ -159,7 +154,11 @@ class App {
         }
       }
 
-      this.toggleActuator(actuatorType, state);
+      const loadedActuator = this.getLoadedActuatorByType(actuatorType);
+      if(loadedActuator.value != state) {
+        this.toggleActuator(loadedActuator, state);
+      }
+      
     }
     catch (err) {
       console.log(err)
@@ -200,10 +199,10 @@ class App {
   }
 
   private async mqttLoop() {
-    /* for (let sensor of this.sensors) {
-      this.mqttClient.publish(this.boardInput, `${sensor.sensorType}:${sensor.pin}`);
-      console.log(`Solicitando leitura '${sensor.description}' | Pino:${sensor.pin} | Id: ${sensor.id}`);
-    } */
+    for (let sensor of this.sensors) {
+      this.mqttClient.publish(this.boardInput, `${sensor.pin}/${sensor.sensorType}`);
+      //console.log(`Solicitando leitura '${sensor.description}' | Pino:${sensor.pin} | Id: ${sensor.id}`);
+    }
   }
 
   private processPayload(payloadBinary: Buffer) {
@@ -222,10 +221,9 @@ class App {
     return processedPayload;
   }
 
-  private toggleActuator(actuatorType: string, state: string) {
-    const loadedActuator = this.getLoadedActuatorByType(actuatorType);
-    this.mqttClient.publish(this.boardInput, `${state}:${loadedActuator.pin}`);
-    console.log(`${loadedActuator.description} ${loadedActuator.pin}: ${state}`)
+  private toggleActuator(actuator: Actuator, state: string) {
+    this.mqttClient.publish(this.boardInput, `${actuator.pin}/${state}`);
+    console.log(`${actuator.description} ${actuator.pin}/${state}`)
   }
 
   private getLoadedActuatorByType(actuatorType: string) {
@@ -272,6 +270,12 @@ class App {
       }
       case 'sun_incidence': {
         return 'sun_cover';
+      }
+      case 'flow': {
+        return '';
+      }
+      case 'rain': {
+        return '';
       }
       default: {
         throw new TypeError('Não há esse tipo de sensor');
