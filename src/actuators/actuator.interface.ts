@@ -2,7 +2,7 @@ interface Actuator {
   id: string;
   pin: number;
   description: string;
-  value?: string;
+  value: string;
   actuatorType: string;
 };
 

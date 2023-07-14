@@ -1,6 +1,6 @@
 export interface Payload {
   pin: number;
-  cmd: string,
+  instruction: string,
   reading: number;
   fromSensor?: boolean;
   fromActuator?: boolean;

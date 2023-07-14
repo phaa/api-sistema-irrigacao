@@ -6,8 +6,8 @@ const sensorSchema = new mongoose.Schema<Sensor>({
   description: { type: String, required: true },
   value: { type: Number, default: 0 },
   sensorType: { type: String, required: true },
-  idealValue: { type: Number, required: true },
-  threshold: { type: Number, required: true },
+  max: { type: Number, required: true },
+  min: { type: Number, required: true },
 }, { 
   timestamps: true 
 });

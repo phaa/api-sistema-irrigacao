@@ -2,10 +2,10 @@ interface Sensor {
   id: string;
   pin: number;
   description: string;
-  value?: number;
+  value: number;
   sensorType: string;
-  idealValue: number;
-  threshold: number;
+  max: number;
+  min: number;
 };
 
 export default Sensor;

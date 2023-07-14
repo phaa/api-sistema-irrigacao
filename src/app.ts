@@ -113,65 +113,86 @@ class App {
 
     if (topic == this.serverInput) {
       if (payload.fromActuator) {
-        await this.handleActuatorReading(payload);
+        await this.handleActuatorInput(payload);
       }
       else if (payload.fromSensor) {
-        await this.handleSensorReading(payload);
+        await this.handleSensorInput(payload);
       }
     }
   }
 
-  private async handleSensorReading(payload: Payload) {
+  private async handleSensorInput(payload: Payload) {
     try {
-      const sensor = this.getLoadedSensor(payload.pin);
+      console.log("\n")
 
-      // Atualiza no banco de dados
-      await SensorModel.findByIdAndUpdate(sensor.id, { value: payload.reading }, { new: true });
-      sensor.value = payload.reading;
+      const filter = {
+        sensorType: payload.instruction,
+        pin: payload.pin,
+      }
+      const update = { value: payload.reading }
+      const sensor = await SensorModel.findOneAndUpdate<Sensor>(filter, update, { new: true });
 
-      console.log(`${sensor.description}.value = ${payload.reading}`)
+      if (!!sensor) {
+        console.log(`${sensor.description} = ${sensor.value}`)
 
-      // Recupera o atuador para aquele tipo de dado proveniente
-      const actuatorType = this.getActuatorForSensor(sensor.sensorType);
+        // Recupera o atuador para aquele tipo de sensor
+        // Devo recuperar o tipo primeiro, pois diferentes atuadores lidam
+        // de diferentes maneiras com as leituras de sensor
+        const actuatorType = this.getActuatorTypeForSensor(sensor.sensorType);
 
-      // Lógica para irrigação e asperção: Menor valor de sensor = acionamento
-      let state = '';
-      if (actuatorType == "watering" || actuatorType == "sprinkler") {
-        if (sensor.value < sensor.idealValue - sensor.threshold) {
-          state = 'high';
+        if (!!actuatorType) {
+          console.log('tem actuator type: ' + actuatorType)
+          let state = '';
+        
+          // Lógica para irrigação e asperção: Menor valor de sensor = acionamento
+          if (actuatorType == "watering" /* || actuatorType == "sprinkler" */) {
+            if (sensor.value < sensor.min) {
+              state = 'high';
+            }
+            else if (sensor.value >= sensor.max) {
+              state = 'low';
+            }
+          }
+          // Lógica para exaustão e cobertura: Maior valor de sensor = acionamento
+          else if (actuatorType == "exaust" /* || actuatorType == "sun_cover" */) {
+            if (sensor.value >= sensor.max) {
+              state = 'high';
+            }
+            else if (sensor.value < sensor.min) {
+              state = 'low';
+            }
+          }
+
+          // Devo testar se state não é vazio, porque enquanto a leitura estiver no intervalo
+          // aceitável, o algoritmo não apontará nenhuma mudança de estado
+          if (!!state) {
+            
+            const actuator = await ActuatorModel.findOne<Actuator>({ actuatorType: actuatorType });
+            
+            // Para evitar chamadas desnecessárias no MQTT, verificamos se o valor 
+            // sugerido é diferente do que já está no banco de dados
+            if (!!actuator && actuator.value != state) {
+              console.log("Estado escolhido: " + state)
+              this.toggleActuator(actuator, state);
+            }
+          }
         }
-        else if (sensor.value >= sensor.idealValue + sensor.threshold) {
-          state = 'low';
+        else {
+          //console.log(`O sensor ${sensor.description} não tem atuador vinculado`);
         }
       }
-      // Lógica para exaustão e cobertura: Maior valor de sensor = acionamento
-      else if (actuatorType == "exaust" || actuatorType == "sun_cover") {
-        if (sensor.value >= sensor.idealValue + sensor.threshold) {
-          state = 'high';
-        }
-        else if (sensor.value < sensor.idealValue - sensor.threshold) {
-          state = 'low';
-        }
-      }
-
-      const loadedActuator = this.getLoadedActuatorByType(actuatorType);
-      if(loadedActuator.value != state) {
-        this.toggleActuator(loadedActuator, state);
-      }
-      
     }
     catch (err) {
       console.log(err)
     }
   }
 
-  private async handleActuatorReading(payload: Payload) {
+  private async handleActuatorInput(payload: Payload) {
     try {
-      const actuator = this.getLoadedActuator(payload.pin);
-      actuator.value = payload.cmd;
-
-      // Atualiza no banco de dados
-      await ActuatorModel.findByIdAndUpdate(actuator.id, { value: actuator.value }, { new: true });
+      const filter = { pin: payload.pin }
+      const update = { value: payload.instruction }
+      await ActuatorModel.findOneAndUpdate(filter, update);
+      console.log("\n")
     }
     catch (err) {
       console.log(err)
@@ -212,7 +233,7 @@ class App {
 
     const processedPayload: Payload = {
       pin: Number(splitInput[0]),
-      cmd: splitInput[1],
+      instruction: splitInput[1],
       reading: Number(splitInput[2]) | 0,
       fromSensor: payload.split('/').length == 3,
       fromActuator: payload.split('/').length == 2
@@ -226,37 +247,7 @@ class App {
     console.log(`${actuator.description} ${actuator.pin}/${state}`)
   }
 
-  private getLoadedActuatorByType(actuatorType: string) {
-    const actuators = this.actuators.find(actuator => actuator.actuatorType == actuatorType);
-
-    if (actuators === undefined) {
-      throw new TypeError('Não há atuador desse tipo');
-    }
-
-    return actuators;
-  }
-
-  private getLoadedSensor(pin: number) {
-    const sensors = this.sensors.find(sensor => sensor.pin == pin);
-
-    if (sensors === undefined) {
-      throw new TypeError('Não há sensor nesse pino');
-    }
-
-    return sensors;
-  }
-
-  private getLoadedActuator(pin: number) {
-    const actuators = this.actuators.find(actuator => actuator.pin == pin);
-
-    if (actuators === undefined) {
-      throw new TypeError('Não há atuador nesse pino');
-    }
-
-    return actuators;
-  }
-
-  private getActuatorForSensor(sensorType: string) {
+  private getActuatorTypeForSensor(sensorType: string) {
     // retorna um tipo de atuador para as entradas de cada tipo de sensor
     switch (sensorType) {
       case 'soil_moisture': {
@@ -266,10 +257,10 @@ class App {
         return 'exaust';
       }
       case 'air_humidity': {
-        return 'sprinkler';
+        return '';
       }
       case 'sun_incidence': {
-        return 'sun_cover';
+        return '';
       }
       case 'flow': {
         return '';

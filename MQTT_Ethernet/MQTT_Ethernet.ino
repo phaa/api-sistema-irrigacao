@@ -1,7 +1,8 @@
 #include <SPI.h>
 #include <Ethernet.h>
 #include <PubSubClient.h>
-#include <DFRobot_DHT11.h>
+#include <dht.h>
+//https://portal.vidadesilicio.com.br/wp-content/uploads/2017/05/DHTlib.zip
 
 // Debug
 #define DEBUG
@@ -18,69 +19,52 @@
 byte mac[] = { 0x00, 0xAA, 0xBB, 0xCC, 0xDE, 0x02 };
 EthernetClient ethClient;
 
-// MQTT
-const char* mqttServer = "10.44.1.35";
+// MQTT 10.44.1.35
+const char* mqttServer = "test.mosquitto.org";
 const char* inputTopic = "esp32/placa/input";
 const char* outputTopic = "esp32/server/input";
-PubSubClient client(ethClient);
+PubSubClient mqttClient(ethClient);
 
 // Sensores
-DFRobot_DHT11 DHT;
 #define DHT11_PIN A0
+dht DHT;
+float humidity = 0;
+float temperature = 0;
 
+// Auxiliar para o contador
+unsigned long previousTime5s = 0;
 
 void setup() {
-  Serial.begin(115200);
-
-  for (int pin = 2; pin <= 53; pin++) {
-    pinMode(pin, OUTPUT);
-    digitalWrite(pin, HIGH);
-  }
-
+  #ifdef DEBUG
+    Serial.begin(115200);
+  #endif
+  
+  initPins();
+  initSensors();
   initEthernet();
   initMQTT();
 
-  // buscar pinos de saída no servidor
   delay(1500);
 }
 
 void loop() {
-  DHT.read(DHT11_PIN);
+  checkCommunication();
   //salvar temperatura e umidade de forma assincrona e salvar em variavel
 
-  if (!client.connected()) {
-    reconnect();
-  }
-  client.loop();
-}
+  if (millis() - previousTime5s >= 5000) {
+    DHT.read11(DHT11_PIN);
 
-void initEthernet() {
-  Ethernet.init(ETHERNET_CS_PIN);
-  // Inicia a conexão ethernet:
-  DEBUG_PRINTLN("Incializando Ethernet...");
-  if (Ethernet.begin(mac) == 0) {
-    DEBUG_PRINTLN("Falha ao conseguir endereço via DHCP");
-    if (Ethernet.hardwareStatus() == EthernetNoHardware) {
-      DEBUG_PRINTLN("Módulo ethernet não encontrado.");
-    } 
-    else if (Ethernet.linkStatus() == LinkOFF) {
-      DEBUG_PRINTLN("Cabo ethernet não conectado.");
-    }
-    // Daqui em diante não há nada para fazer, então para no loop
-    while (true) {
-      delay(1);
-    }
-  }
-  // Printa o IP
-  DEBUG_PRINT("IP atribuído: ");
-  DEBUG_PRINTLN(Ethernet.localIP());
-}
+    temperature = DHT.temperature;
+    humidity = DHT.humidity;
 
+    previousTime5s = millis();
+  }
+}
 
 void callback(char* topic, byte* payload, unsigned int length) {
-  DEBUG_PRINT("Mensagem recebida [");
+  /* DEBUG_PRINT("[MQTT] Mensagem recebida [");
   DEBUG_PRINT(topic);
-  DEBUG_PRINT("] ");
+  DEBUG_PRINT("] "); */
 
   // Monta uma string com os bytes recebidos
   String inputString;
@@ -95,8 +79,8 @@ void callback(char* topic, byte* payload, unsigned int length) {
     // 2/HIGH ligar pino 2
     // 3/LOW desligar pino 3
     uint8_t dotsIndex = inputString.indexOf("/");
-    
-    // mesmo que não usemos o pino diretamente no arduino, ele serve para identificar 
+
+    // mesmo que não usemos o pino diretamente no arduino, ele serve para identificar
     // o sensor/atuador no servidor
     String stringPin = inputString.substring(0, dotsIndex);
     uint8_t pin = stringPin.toInt();
@@ -108,72 +92,141 @@ void callback(char* topic, byte* payload, unsigned int length) {
     if (cmd.equals("low")) {
       response = stringPin + "/low";
       digitalWrite(pin, HIGH);
-    } 
-    else if (cmd.equals("high")) {
+    } else if (cmd.equals("high")) {
       response = stringPin + "/high";
       digitalWrite(pin, LOW);
-    } 
-    else if (cmd.equals("soil_moisture")) {
-      // retorna leitura do sensor de solo
+    } else if (cmd.equals("soil_moisture")) {
       response = stringPin + "/soil_moisture/" + String("20");
-    } 
-    else if (cmd.equals("air_temperature")) {
-      // retorna leitura do DHT 11.temperatura
-      response = stringPin + "/air_temperature/" + String(DHT.temperature);
-      DEBUG_PRINTLN("No if de temperatura");
-      DEBUG_PRINTLN(DHT.temperature);
-    } 
-    else if (cmd.equals("air_humidity")) {
-      // retorna leitura do DHT 11.umidade
-      response = stringPin + "/air_humidity/" + String(DHT.humidity);
-      DEBUG_PRINTLN("No if de umidade");
-      DEBUG_PRINTLN(DHT.humidity);
-    } 
-    else if (cmd.equals("sun_incidence")) {
+    } else if (cmd.equals("air_temperature")) {
+      response = stringPin + "/air_temperature/" + String(temperature);
+      DEBUG_PRINT("No if de temperatura ");
+      DEBUG_PRINTLN(temperature);
+    } else if (cmd.equals("air_humidity")) {
+      response = stringPin + "/air_humidity/" + String(humidity);
+      DEBUG_PRINT("No if de umidade ");
+      DEBUG_PRINTLN(humidity);
+    } else if (cmd.equals("sun_incidence")) {
       // retorna leitura de incidência solar
-    }
-    else if (cmd.equals("flow")) {
+    } else if (cmd.equals("flow")) {
       // retorna leitura do sensor de fluxo
       // verifica se a bomba tá ligada
       // se estiver desligada, mas o sensor tiver leitura, desativa a bomba
-    }
-    else if (cmd.equals("rain")) {
+    } else if (cmd.equals("rain")) {
       // retorna leitura do sensor de chuva
     }
-    
-    
+
+    DEBUG_PRINT("[MQTT] Resposta: ");
     DEBUG_PRINTLN(response);
     //DEBUG_PRINTLN(response);
     int strLen = response.length() + 1;
     char charArray[strLen];
     response.toCharArray(charArray, strLen);
 
-    client.publish(outputTopic, charArray);
+    mqttClient.publish(outputTopic, charArray);
+  }
+}
+
+// Pinos
+void initPins() {
+  for (int pin = 2; pin <= 53; pin++) {
+    pinMode(pin, OUTPUT);
+    digitalWrite(pin, HIGH);
+  }
+}
+
+// Sensores
+void initSensors() {
+  // Umidade e temperatura do ar
+  DHT.read11(DHT11_PIN);
+  temperature = DHT.temperature;
+  humidity = DHT.humidity;
+}
+
+// Checagem de comunicação
+void checkCommunication() {
+  checkEthernet();
+
+  if (!mqttClient.connected()) {
+    reconnect();
+  }
+  mqttClient.loop();
+}
+
+// Ethernet
+void initEthernet() {
+  Ethernet.init(ETHERNET_CS_PIN);
+  // Inicia a conexão ethernet:
+  DEBUG_PRINTLN("[Ethernet] Incializando Ethernet...");
+  if (Ethernet.begin(mac) == 0) {
+    DEBUG_PRINTLN("[Ethernet] Falha ao conseguir endereço via DHCP");
+    if (Ethernet.hardwareStatus() == EthernetNoHardware) {
+      DEBUG_PRINTLN("[Ethernet] Módulo ethernet não encontrado.");
+    } else if (Ethernet.linkStatus() == LinkOFF) {
+      DEBUG_PRINTLN("[Ethernet] Cabo ethernet não conectado.");
+    }
+    // Daqui em diante não há nada para fazer, então para no loop
+    while (true) {
+      delay(1);
+    }
+  }
+  // Printa o IP
+  DEBUG_PRINT("[Ethernet] IP atribuído: ");
+  DEBUG_PRINTLN(Ethernet.localIP());
+}
+
+void checkEthernet() {
+  switch (Ethernet.maintain()) {
+    case 1:
+      DEBUG_PRINTLN("[Ethernet] Ocorreu um erro ao renovar o IP");
+      break;
+
+    case 2:
+      DEBUG_PRINTLN("[Ethernet] Renovação do IP feita com sucesso");
+      DEBUG_PRINT("[Ethernet] Endereço IP: ");
+      DEBUG_PRINTLN(Ethernet.localIP());
+      break;
+
+    case 3:
+      DEBUG_PRINTLN("[Ethernet] Ocorreu um erro ao reconectar");
+      break;
+
+    case 4:
+      DEBUG_PRINTLN("[Ethernet] Reconexão feita com sucesso");
+      DEBUG_PRINT("[Ethernet] Endereço IP: ");
+      DEBUG_PRINTLN(Ethernet.localIP());
+      break;
+
+    default:
+      break;
   }
 }
 
 // MQTT
 void initMQTT() {
-  client.setServer(mqttServer, 1883);
-  client.setCallback(callback);
+  mqttClient.setServer(mqttServer, 1883);
+  mqttClient.setCallback(callback);
 }
 
 void reconnect() {
-  // Repete o loop enquanto não estiver conectado
-  while (!client.connected()) {
-    DEBUG_PRINTLN("Iniciando conexão MQTT...");
-    if (client.connect("arduino-estufa")) {
-      DEBUG_PRINTLN("Conexão bem sucedida");
-      //client.publish("outTopic", "hello world");
-      client.subscribe(inputTopic);
-      DEBUG_PRINT("Inscrito no tópico: ");
-      DEBUG_PRINTLN(inputTopic);
-    } else {
-      DEBUG_PRINT("erro, rc=");
-      DEBUG_PRINT(client.state());
-      DEBUG_PRINTLN(" tentando novamente em 5s");
-      delay(5000);
+  if (Ethernet.linkStatus() == LinkON) {
+    DEBUG_PRINTLN("[Ethernet] Ethernet OK");
+    while (!mqttClient.connected()) {
+      DEBUG_PRINTLN("[MQTT] Iniciando conexão MQTT...");
+      if (mqttClient.connect("arduino-estufa")) {
+        DEBUG_PRINTLN("[MQTT] Conexão bem sucedida");
+        //client.publish("outTopic", "hello world");
+        mqttClient.subscribe(inputTopic);
+        DEBUG_PRINT("[MQTT] Inscrito no tópico: ");
+        DEBUG_PRINTLN(inputTopic);
+      } else {
+        DEBUG_PRINT("[MQTT] erro, rc=");
+        DEBUG_PRINT(mqttClient.state());
+        DEBUG_PRINTLN(" tentando novamente em 5s");
+        delay(5000);
+      }
     }
+  } else {
+    initEthernet();
   }
 }
 
