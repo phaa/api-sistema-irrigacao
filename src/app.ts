@@ -4,53 +4,103 @@ import mongoose from 'mongoose';
 import cors from 'cors';
 import { MqttClient, connect } from 'mqtt';
 
-
 // Interfaces
 import Actuator from './actuators/actuator.interface';
 import Sensor from './sensors/sensor.interface';
+import Payload from './interfaces/payload.interface';
 
 // Models
 import SensorModel from './sensors/sensor.model';
 import ActuatorModel from './actuators/actuator.model';
 
 // Controllers
-import Controller from './interfaces/controller.interface';
 import UserController from './users/users.controller';
 import SensorController from './sensors/sensor.controller';
 import ActuatorController from './actuators/actuator.controller';
-import { Payload } from './interfaces/payload.interface';
+
+// Utils
+import Timer from './utils/timer';
+
 
 class App {
   // Varáveis de classe 
   private app: express.Application;
   private mqttClient!: MqttClient;
-  private sensors!: Sensor[];
-  private actuators!: Actuator[];
 
   private serverInput: string;
   private boardInput: string;
+
+  private mqttTimer!: Timer;
+  private readingsTimer!: Timer;
 
   constructor() {
     this.app = express();
     this.serverInput = 'esp32/server/input';
     this.boardInput = 'esp32/placa/input';
+
+    //verificar se atualizar pela api está mandando mqtt corretamente
   }
 
   public async initialize() {
-    this.mqttLoop = this.mqttLoop.bind(this);
-    this.handleMqttLoop = this.handleMqttLoop.bind(this);
+    // Seta a palavra-chave this p/ referenciar à própria instância da classe App
+    this.bindFunctions();
 
     // Aguarda o sistema conectar com o Mongo
     await this.connectDatabase();
 
-    // Configura mqtt
-    this.configureMqtt();
-    this.configureMqttLoop();
+    // Configura o módulo MQTT
+    this.initMqtt();
 
-    // Executa demais funções inicializadoras
+    // Configura os timers
+    this.initTimers()
+
+    // Configura o resto do sistema
     this.initExpress();
     this.initializeMiddlewares();
     this.initializeControllers();
+  }
+
+  //#region Inicializacao
+  private bindFunctions() {
+    this.handleMqttLoop = this.handleMqttLoop.bind(this);
+    this.handleMqttInput = this.handleMqttInput.bind(this);
+  }
+  
+  private async connectDatabase() {
+    const { MONGO_USER, MONGO_PASSWORD, MONGO_PATH } = process.env;
+    try {
+      console.log('[BD] Conectando ao banco de dados...')
+      await mongoose.connect(`mongodb+srv://${MONGO_USER}:${MONGO_PASSWORD}@${MONGO_PATH}`);
+      console.log('[BD] Conectado ao banco de dados com sucesso')
+    } catch (error) {
+      console.log(error);
+    }
+  }
+  
+  private initMqtt() {
+    console.log("[MQTT] Configurando módulo MQTT...")
+    const { MQTT_BROKER_URL } = process.env;
+    this.mqttClient = connect(`mqtt://${MQTT_BROKER_URL}`);
+
+    console.log(`[MQTT] Conectando ao broker ${MQTT_BROKER_URL}`)
+    this.mqttClient.on('connect', () => {
+      console.log(`[MQTT] Módulo MQTT configurado com sucesso.`);
+    });
+
+    this.mqttClient.subscribe(this.serverInput, () => {
+      console.log(`[MQTT] Inscrito no tópico ${this.serverInput}`)
+    });
+
+    this.mqttClient.on('message', this.handleMqttInput);
+  }
+
+  private initTimers() {
+    this.mqttTimer = new Timer(10000, this.handleMqttLoop);
+    this.readingsTimer = new Timer(2000, this.readingLoop);
+
+    // Começa o loop intermitente dos timers
+    this.mqttTimer.loop();
+    this.readingsTimer.loop();
   }
 
   private initExpress() {
@@ -77,36 +127,10 @@ class App {
     });
     console.log("[Controllers] Controladores iniciados com sucesso")
   }
+  //#endregion
 
-  private async connectDatabase() {
-    const { MONGO_USER, MONGO_PASSWORD, MONGO_PATH } = process.env;
-    try {
-      console.log('[BD] Conectando ao banco de dados...')
-      await mongoose.connect(`mongodb+srv://${MONGO_USER}:${MONGO_PASSWORD}@${MONGO_PATH}`);
-      console.log('[BD] Conectado ao banco de dados com sucesso')
-    } catch (error) {
-      console.log(error);
-    }
-  }
-
-  private configureMqtt() {
-    console.log("[MQTT] Configurando módulo MQTT...")
-    const { MQTT_BROKER_URL } = process.env;
-    this.mqttClient = connect(`mqtt://${MQTT_BROKER_URL}`);
-
-    console.log(`[MQTT] Conectando ao broker ${MQTT_BROKER_URL}`)
-    this.mqttClient.on('connect', () => {
-      console.log(`[MQTT] Módulo MQTT configurado com sucesso.`);
-    });
-
-    this.mqttClient.subscribe(this.serverInput, () => {
-      console.log(`[MQTT] Inscrito no tópico ${this.serverInput}`)
-    });
-
-    this.mqttClient.on('message', this.handleMqttLoop);
-  }
-
-  private async handleMqttLoop(topic: string, payloadBinary: Buffer) {
+  //#region ManipulacaoMQTT
+  private async handleMqttInput(topic: string, payloadBinary: Buffer) {
     const payload = this.processPayload(payloadBinary);
 
     if (topic == this.serverInput) {
@@ -190,7 +214,7 @@ class App {
       const filter = { pin: payload.pin }
       const update = { value: payload.instruction }
       const actuator = await ActuatorModel.findOneAndUpdate<Actuator>(filter, update, { new: true });
-      if(actuator) {
+      if (actuator) {
         console.log(`[Atuador] ${actuator.description}/${actuator.value}\n`);
       }
     }
@@ -199,31 +223,11 @@ class App {
     }
   }
 
-  // Arranjo para evitar o time drift
-  // criar uma função de loop para cada 1 hora
-  private configureMqttLoop() {
-    // Verifica a hora atual e calcula o delay até o proximo intervalo
-    const func = this.mqttLoop;
-    const interval = 10000; // 1 min /30s
-    let now = new Date();
-    //console.log('\n'+now+'\n')
-    let delay = interval - now.valueOf() % interval;
-
-    const start = () => {
-      // Executa a função passada
-      func();
-      // ... E inicia a recursividade
-      this.configureMqttLoop();
-    }
-
-    // Segura a execução até o momento certo
-    setTimeout(start, delay);
-  }
-
-  private async mqttLoop() {
-    for (let sensor of this.sensors) {
+  private async handleMqttLoop() {
+    const sensors = await SensorModel.find<Sensor>();
+    for (let sensor of sensors) {
       this.mqttClient.publish(this.boardInput, `${sensor.pin}/${sensor.sensorType}`);
-      //console.log(`Solicitando leitura '${sensor.description}' | Pino:${sensor.pin} | Id: ${sensor.id}`);
+      console.log(`Solicitando leitura '${sensor.description}' | Pino:${sensor.pin} | Id: ${sensor.id}`);
     }
   }
 
@@ -274,6 +278,11 @@ class App {
       }
     }
   }
+  //#endregion
+
+  private async readingLoop() {
+  }
+  
 }
 
 export default App;

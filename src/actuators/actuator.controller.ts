@@ -80,7 +80,7 @@ class ActuatorController implements Controller {
       const id = req.params.id;
       // adicionar verificação: se o atuador estiver em uso, proibir a deleção
       const actuator = await this.actuator.findByIdAndDelete(id);
-      return res.status(200).json({ message: `Atuador <<${actuator?.id}>> deletado com sucesso` });
+      return res.status(200).json({ message: `Atuador ${actuator?.id} deletado com sucesso` });
     }
     catch (error: any) {
       return res.status(500).json({ message: error.message });
@@ -91,11 +91,10 @@ class ActuatorController implements Controller {
     try {
       const id = req.params.id;
       const actuatorData: Actuator = req.body;
-      const actuator = await this.actuator.findById(id);
+      const actuator = await this.actuator.findByIdAndUpdate(id, actuatorData, { new: true });
       if (actuator) {
         this.mqttClient.publish(this.outputTopic, `${actuatorData.value}:${actuator.pin}`);
-        const actuatorUpdata = await this.actuator.findByIdAndUpdate(id, actuatorData, { new: true });
-        return res.status(200).json({ actuator: actuatorUpdata });
+        return res.status(200).json({ actuator: actuator });
       }
       
     }

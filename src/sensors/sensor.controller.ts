@@ -74,7 +74,7 @@ class SensorController implements Controller {
     try {
       const id = req.params.id;
       const sensor = await this.sensor.findByIdAndDelete(id);
-      return res.status(200).json({ message: `Sensor <<${sensor?.id}>> deletado com sucesso` });
+      return res.status(200).json({ message: `Sensor ${sensor?.id} deletado com sucesso` });
     }
     catch (error: any) {
       return res.status(500).json({ message: error.message });

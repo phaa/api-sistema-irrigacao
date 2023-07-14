@@ -1,4 +1,4 @@
-export interface Payload {
+export default interface Payload {
   pin: number;
   instruction: string,
   reading: number;
