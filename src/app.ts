@@ -42,7 +42,6 @@ class App {
 
     // Aguarda o sistema conectar com o Mongo
     await this.connectDatabase();
-    await this.syncToDatabase();
 
     // Configura mqtt
     this.configureMqtt();
@@ -67,6 +66,7 @@ class App {
   }
 
   private initializeControllers() {
+    console.log("[Controllers] Inciando controladores...")
     const controllers = [
       new UserController(),
       new SensorController(),
@@ -75,34 +75,32 @@ class App {
     controllers.forEach((controller) => {
       this.app.use('/', controller.router);
     });
+    console.log("[Controllers] Controladores iniciados com sucesso")
   }
 
   private async connectDatabase() {
     const { MONGO_USER, MONGO_PASSWORD, MONGO_PATH } = process.env;
     try {
-      console.log('Conectando ao banco de dados')
+      console.log('[BD] Conectando ao banco de dados...')
       await mongoose.connect(`mongodb+srv://${MONGO_USER}:${MONGO_PASSWORD}@${MONGO_PATH}`);
-      console.log('Conectado com sucesso ao banco de dados')
+      console.log('[BD] Conectado ao banco de dados com sucesso')
     } catch (error) {
       console.log(error);
     }
   }
 
-  private async syncToDatabase() {
-    this.sensors = await SensorModel.find<Sensor>();
-    this.actuators = await ActuatorModel.find<Actuator>();
-  }
-
   private configureMqtt() {
+    console.log("[MQTT] Configurando módulo MQTT...")
     const { MQTT_BROKER_URL } = process.env;
     this.mqttClient = connect(`mqtt://${MQTT_BROKER_URL}`);
 
+    console.log(`[MQTT] Conectando ao broker ${MQTT_BROKER_URL}`)
     this.mqttClient.on('connect', () => {
-      console.log(`Conectado com sucesso ao broker: ${MQTT_BROKER_URL}`);
+      console.log(`[MQTT] Módulo MQTT configurado com sucesso.`);
     });
 
     this.mqttClient.subscribe(this.serverInput, () => {
-      console.log(`Inscrito no tópico ${this.serverInput}`)
+      console.log(`[MQTT] Inscrito no tópico ${this.serverInput}`)
     });
 
     this.mqttClient.on('message', this.handleMqttLoop);
@@ -143,7 +141,7 @@ class App {
         if (!!actuatorType) {
           console.log('tem actuator type: ' + actuatorType)
           let state = '';
-        
+
           // Lógica para irrigação e asperção: Menor valor de sensor = acionamento
           if (actuatorType == "watering" /* || actuatorType == "sprinkler" */) {
             if (sensor.value < sensor.min) {
@@ -166,9 +164,9 @@ class App {
           // Devo testar se state não é vazio, porque enquanto a leitura estiver no intervalo
           // aceitável, o algoritmo não apontará nenhuma mudança de estado
           if (!!state) {
-            
+
             const actuator = await ActuatorModel.findOne<Actuator>({ actuatorType: actuatorType });
-            
+
             // Para evitar chamadas desnecessárias no MQTT, verificamos se o valor 
             // sugerido é diferente do que já está no banco de dados
             if (!!actuator && actuator.value != state) {
@@ -191,8 +189,10 @@ class App {
     try {
       const filter = { pin: payload.pin }
       const update = { value: payload.instruction }
-      await ActuatorModel.findOneAndUpdate(filter, update);
-      console.log("\n")
+      const actuator = await ActuatorModel.findOneAndUpdate<Actuator>(filter, update, { new: true });
+      if(actuator) {
+        console.log(`[Atuador] ${actuator.description}/${actuator.value}\n`);
+      }
     }
     catch (err) {
       console.log(err)
@@ -200,6 +200,7 @@ class App {
   }
 
   // Arranjo para evitar o time drift
+  // criar uma função de loop para cada 1 hora
   private configureMqttLoop() {
     // Verifica a hora atual e calcula o delay até o proximo intervalo
     const func = this.mqttLoop;
