@@ -26,21 +26,20 @@ const char* outputTopic = "esp32/server/input";
 PubSubClient mqttClient(ethClient);
 
 // Sensores
-#define DHT11_PIN A0
 dht DHT;
-float humidity = 0;
-float temperature = 0;
+
+float humidityInternal = 0;
+float temperatureInternal = 0;
 
 // Auxiliar para o contador
 unsigned long previousTime5s = 0;
 
 void setup() {
-  #ifdef DEBUG
-    Serial.begin(115200);
-  #endif
-  
+#ifdef DEBUG
+  Serial.begin(115200);
+#endif
+
   initPins();
-  initSensors();
   initEthernet();
   initMQTT();
 
@@ -49,16 +48,6 @@ void setup() {
 
 void loop() {
   checkCommunication();
-  //salvar temperatura e umidade de forma assincrona e salvar em variavel
-
-  if (millis() - previousTime5s >= 5000) {
-    DHT.read11(DHT11_PIN);
-
-    temperature = DHT.temperature;
-    humidity = DHT.humidity;
-
-    previousTime5s = millis();
-  }
 }
 
 void callback(char* topic, byte* payload, unsigned int length) {
@@ -69,55 +58,61 @@ void callback(char* topic, byte* payload, unsigned int length) {
   // Monta uma string com os bytes recebidos
   String inputString;
   for (int i = 0; i < length; i++) {
-    DEBUG_PRINT((char)payload[i]);
+    //DEBUG_PRINT((char)payload[i]);
     inputString += (char)payload[i];
   }
-  DEBUG_PRINTLN();
+  //DEBUG_PRINTLN();
 
   if (String(topic) == "esp32/placa/input") {
-    // 15/sensor_typeleitura analógica da porta 15
-    // 2/HIGH ligar pino 2
-    // 3/LOW desligar pino 3
-    uint8_t dotsIndex = inputString.indexOf("/");
 
-    // mesmo que não usemos o pino diretamente no arduino, ele serve para identificar
-    // o sensor/atuador no servidor
-    String stringPin = inputString.substring(0, dotsIndex);
+    String stringPin = getValue(inputString, '/', 0);
+    String cmd = getValue(inputString, '/', 1);
+    String store = getValue(inputString, '/', 2);
+
     uint8_t pin = stringPin.toInt();
 
-    String cmd = inputString.substring(dotsIndex + 1, inputString.length());
 
     // pin/cmd/value? | 10/a/78.0 | 10/high | 10/low
-    String response = "";
+    String response = stringPin;
     if (cmd.equals("low")) {
-      response = stringPin + "/low";
+      response += "/low";
       digitalWrite(pin, HIGH);
     } else if (cmd.equals("high")) {
-      response = stringPin + "/high";
+      response += "/high";
       digitalWrite(pin, LOW);
     } else if (cmd.equals("soil_moisture")) {
-      response = stringPin + "/soil_moisture/" + String("20");
+      // novo Agua: 305, Ar: 682 | antigo Agua:269, Ar: 632
+      short soilMoisture = map(analogRead(pin), 269, 632, 100, 0);
+
+      // Normaliza a entrada do sensor
+      if (soilMoisture > 100) {
+        soilMoisture = 100;
+      } else if (soilMoisture < 0) {
+        soilMoisture = 0;
+      }
+
+      response += "/soil_moisture/" + String(soilMoisture);
     } else if (cmd.equals("air_temperature")) {
-      response = stringPin + "/air_temperature/" + String(temperature);
-      DEBUG_PRINT("No if de temperatura ");
-      DEBUG_PRINTLN(temperature);
+      DHT.read11(pin);
+      response += "/air_temperature/" + String(DHT.temperature);
     } else if (cmd.equals("air_humidity")) {
-      response = stringPin + "/air_humidity/" + String(humidity);
-      DEBUG_PRINT("No if de umidade ");
-      DEBUG_PRINTLN(humidity);
+      DHT.read11(pin);
+      response += "/air_humidity/" + String(DHT.humidity);
     } else if (cmd.equals("sun_incidence")) {
-      // retorna leitura de incidência solar
-    } else if (cmd.equals("flow")) {
-      // retorna leitura do sensor de fluxo
-      // verifica se a bomba tá ligada
-      // se estiver desligada, mas o sensor tiver leitura, desativa a bomba
+      response += "/sun_incidence/" + String(analogRead(pin));
+    } else if (cmd.equals("water_level")) {
+      response += "/water_level/" + String(analogRead(pin));
     } else if (cmd.equals("rain")) {
       // retorna leitura do sensor de chuva
     }
 
+    if (store != "") {
+      response = response + "/" + store;
+    }
+
     DEBUG_PRINT("[MQTT] Resposta: ");
     DEBUG_PRINTLN(response);
-    //DEBUG_PRINTLN(response);
+
     int strLen = response.length() + 1;
     char charArray[strLen];
     response.toCharArray(charArray, strLen);
@@ -135,12 +130,6 @@ void initPins() {
 }
 
 // Sensores
-void initSensors() {
-  // Umidade e temperatura do ar
-  DHT.read11(DHT11_PIN);
-  temperature = DHT.temperature;
-  humidity = DHT.humidity;
-}
 
 // Checagem de comunicação
 void checkCommunication() {
@@ -228,6 +217,21 @@ void reconnect() {
   } else {
     initEthernet();
   }
+}
+
+String getValue(String data, char separator, int index) {
+  int found = 0;
+  int strIndex[] = { 0, -1 };
+  int maxIndex = data.length() - 1;
+
+  for (int i = 0; i <= maxIndex && found <= index; i++) {
+    if (data.charAt(i) == separator || i == maxIndex) {
+      found++;
+      strIndex[0] = strIndex[1] + 1;
+      strIndex[1] = (i == maxIndex) ? i + 1 : i;
+    }
+  }
+  return found > index ? data.substring(strIndex[0], strIndex[1]) : "";
 }
 
 

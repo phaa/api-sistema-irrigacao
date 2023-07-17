@@ -4,6 +4,7 @@ interface Reading {
   id: string;
   value: number;
   sensor: Sensor;
+  sensorType: string;
 };
 
 export default Reading;

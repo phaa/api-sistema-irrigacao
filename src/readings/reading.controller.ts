@@ -16,6 +16,7 @@ class ReadingController implements Controller {
     // Rotas de consulta
     this.router.get(this.path, this.getAll);
     this.router.get(`${this.path}/:id`, this.getById);
+    this.router.get(`${this.path}/filter-by-interval`, this.getByInterval);
 
     // Rotas de modificação
     this.router.patch(`${this.path}/:id`, this.modify);
@@ -39,6 +40,17 @@ class ReadingController implements Controller {
       const id = req.params.id;
       const reading = await this.reading.findById(id);
       return res.status(200).json({ reading: reading });
+    }
+    catch (error: any) {
+      return res.status(500).json({ message: error.message });
+    }
+  }
+
+  private getByInterval: RequestHandler = async (req: Request, res: Response) => {
+    try {
+      const { start, end } = req.body;
+      const readings: Reading[] = await this.reading.find<Reading>({ "created_on": { "$gte": start, "$lt": end } });
+      return res.status(200).json({ sensors: readings });
     }
     catch (error: any) {
       return res.status(500).json({ message: error.message });

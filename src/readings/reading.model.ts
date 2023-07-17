@@ -7,6 +7,7 @@ const readingSchema = new mongoose.Schema<Reading>({
     ref: 'Sensor',
     type: mongoose.Schema.Types.ObjectId,
   },
+  sensorType: { type: String, required: true },
 }, { 
   timestamps: true 
 });

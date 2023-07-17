@@ -20,25 +20,24 @@ import ActuatorController from './actuators/actuator.controller';
 
 // Utils
 import Timer from './utils/timer';
+import ReadingModel from './readings/reading.model';
+import ReadingController from './readings/reading.controller';
 
 
 class App {
   // Varáveis de classe 
   private app: express.Application;
   private mqttClient!: MqttClient;
+  private store: boolean = false;
 
-  private serverInput: string;
-  private boardInput: string;
+  private serverInput: string = 'esp32/server/input';
+  private boardInput: string = 'esp32/placa/input';
 
   private mqttTimer!: Timer;
   private readingsTimer!: Timer;
 
   constructor() {
     this.app = express();
-    this.serverInput = 'esp32/server/input';
-    this.boardInput = 'esp32/placa/input';
-
-    //verificar se atualizar pela api está mandando mqtt corretamente
   }
 
   public async initialize() {
@@ -64,8 +63,9 @@ class App {
   private bindFunctions() {
     this.handleMqttLoop = this.handleMqttLoop.bind(this);
     this.handleMqttInput = this.handleMqttInput.bind(this);
+    this.readingLoop = this.readingLoop.bind(this);
   }
-  
+
   private async connectDatabase() {
     const { MONGO_USER, MONGO_PASSWORD, MONGO_PATH } = process.env;
     try {
@@ -76,15 +76,13 @@ class App {
       console.log(error);
     }
   }
-  
+
   private initMqtt() {
-    console.log("[MQTT] Configurando módulo MQTT...")
     const { MQTT_BROKER_URL } = process.env;
     this.mqttClient = connect(`mqtt://${MQTT_BROKER_URL}`);
 
-    console.log(`[MQTT] Conectando ao broker ${MQTT_BROKER_URL}`)
     this.mqttClient.on('connect', () => {
-      console.log(`[MQTT] Módulo MQTT configurado com sucesso.`);
+      console.log(`[MQTT] Módulo MQTT configurado com sucesso: ${MQTT_BROKER_URL}`);
     });
 
     this.mqttClient.subscribe(this.serverInput, () => {
@@ -94,9 +92,9 @@ class App {
     this.mqttClient.on('message', this.handleMqttInput);
   }
 
-  private initTimers() {
-    this.mqttTimer = new Timer(10000, this.handleMqttLoop);
-    this.readingsTimer = new Timer(2000, this.readingLoop);
+  private async initTimers() {
+    this.mqttTimer = new Timer(5000, this.handleMqttLoop);
+    this.readingsTimer = new Timer(60000 * 60, this.readingLoop);
 
     // Começa o loop intermitente dos timers
     this.mqttTimer.loop();
@@ -106,7 +104,7 @@ class App {
   private initExpress() {
     const { PORT } = process.env;
     this.app.listen(PORT, () => {
-      console.log(`Servidor iniciando na porta ${PORT}`);
+      console.log(`[Express] Servidor iniciando na porta ${PORT}`);
     });
   }
 
@@ -121,6 +119,7 @@ class App {
       new UserController(),
       new SensorController(),
       new ActuatorController(this.mqttClient, this.boardInput),
+      new ReadingController(),
     ];
     controllers.forEach((controller) => {
       this.app.use('/', controller.router);
@@ -145,29 +144,35 @@ class App {
 
   private async handleSensorInput(payload: Payload) {
     try {
-      console.log("\n")
-
       const filter = {
-        sensorType: payload.instruction,
+        sensorType: payload.instruction, //tipo de sensor
         pin: payload.pin,
       }
       const update = { value: payload.reading }
       const sensor = await SensorModel.findOneAndUpdate<Sensor>(filter, update, { new: true });
 
       if (!!sensor) {
+        //Se for hora de armazenar, cria uma leitura
+        if (payload.store == 'true') {
+          console.log("Armazenar")
+          const reading = new ReadingModel({
+            value: payload.reading,
+            sensor: sensor.id,
+            sensorType: sensor.sensorType,
+          });
+          await reading.save();
+        }
         console.log(`${sensor.description} = ${sensor.value}`)
 
         // Recupera o atuador para aquele tipo de sensor
-        // Devo recuperar o tipo primeiro, pois diferentes atuadores lidam
-        // de diferentes maneiras com as leituras de sensor
         const actuatorType = this.getActuatorTypeForSensor(sensor.sensorType);
 
         if (!!actuatorType) {
-          console.log('tem actuator type: ' + actuatorType)
+          //console.log('tem actuator type: ' + actuatorType)
           let state = '';
 
           // Lógica para irrigação e asperção: Menor valor de sensor = acionamento
-          if (actuatorType == "watering" /* || actuatorType == "sprinkler" */) {
+          if (actuatorType == "watering" || actuatorType == "lighting" /* || actuatorType == "sprinkler" */) {
             if (sensor.value < sensor.min) {
               state = 'high';
             }
@@ -176,7 +181,7 @@ class App {
             }
           }
           // Lógica para exaustão e cobertura: Maior valor de sensor = acionamento
-          else if (actuatorType == "exaust" /* || actuatorType == "sun_cover" */) {
+          else if (actuatorType == "exaust") {
             if (sensor.value >= sensor.max) {
               state = 'high';
             }
@@ -188,13 +193,12 @@ class App {
           // Devo testar se state não é vazio, porque enquanto a leitura estiver no intervalo
           // aceitável, o algoritmo não apontará nenhuma mudança de estado
           if (!!state) {
-
             const actuator = await ActuatorModel.findOne<Actuator>({ actuatorType: actuatorType });
 
             // Para evitar chamadas desnecessárias no MQTT, verificamos se o valor 
             // sugerido é diferente do que já está no banco de dados
             if (!!actuator && actuator.value != state) {
-              console.log("Estado escolhido: " + state)
+              //console.log("Estado escolhido: " + state)
               this.toggleActuator(actuator, state);
             }
           }
@@ -215,7 +219,7 @@ class App {
       const update = { value: payload.instruction }
       const actuator = await ActuatorModel.findOneAndUpdate<Actuator>(filter, update, { new: true });
       if (actuator) {
-        console.log(`[Atuador] ${actuator.description}/${actuator.value}\n`);
+        console.log(`[Atuador] ${actuator.description}/${actuator.value}`);
       }
     }
     catch (err) {
@@ -226,13 +230,21 @@ class App {
   private async handleMqttLoop() {
     const sensors = await SensorModel.find<Sensor>();
     for (let sensor of sensors) {
-      this.mqttClient.publish(this.boardInput, `${sensor.pin}/${sensor.sensorType}`);
-      console.log(`Solicitando leitura '${sensor.description}' | Pino:${sensor.pin} | Id: ${sensor.id}`);
+      let payload = `${sensor.pin}/${sensor.sensorType}`;
+      this.mqttClient.publish(this.boardInput, this.store ? payload += '/true' : payload);
+    }
+
+    if (this.store) {
+      this.store = false;
     }
   }
 
+  private async readingLoop() {
+    this.store = true;
+  }
+
   private processPayload(payloadBinary: Buffer) {
-    // pin/cmd/value? | 10/a/78.0 | 10/on | 10/off
+    // pin/cmd/value? 10/a/78.0/true | 10/a/78.0 | 10/low | 10/high
     const payload = payloadBinary.toString();
     const splitInput = payload.split('/');
 
@@ -240,8 +252,9 @@ class App {
       pin: Number(splitInput[0]),
       instruction: splitInput[1],
       reading: Number(splitInput[2]) | 0,
-      fromSensor: payload.split('/').length == 3,
-      fromActuator: payload.split('/').length == 2
+      store: splitInput[3],
+      fromSensor: splitInput.length == 3 || splitInput.length == 4,
+      fromActuator: splitInput.length == 2,
     };
 
     return processedPayload;
@@ -265,12 +278,12 @@ class App {
         return '';
       }
       case 'sun_incidence': {
-        return '';
-      }
-      case 'flow': {
-        return '';
+        return 'lighting';
       }
       case 'rain': {
+        return '';
+      }
+      case 'water_level': {
         return '';
       }
       default: {
@@ -279,10 +292,6 @@ class App {
     }
   }
   //#endregion
-
-  private async readingLoop() {
-  }
-  
 }
 
 export default App;
