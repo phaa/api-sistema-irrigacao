@@ -28,10 +28,6 @@ PubSubClient mqttClient(ethClient);
 // Sensores
 dht DHT;
 
-int flowPin = 2;    //Este é o pino de entrada no Arduino
-double flowRate;    //Este é o valor que pretende-se calcular
-volatile int count; 
-
 void setup() {
 #ifdef DEBUG
   Serial.begin(115200);
@@ -119,8 +115,6 @@ void callback(char* topic, byte* payload, unsigned int length) {
 
 // Pinos
 void initPins() {
-  pinMode(2, INPUT); //Seta o pino de entrada
-  attachInterrupt(0, Flow, RISING);  //Configura o interruptor 0 (pino 2 no Arduino Uno) para rodar a função "Flow"
 
   for (int pin = 3; pin <= 7; pin++) {
     pinMode(pin, OUTPUT);
