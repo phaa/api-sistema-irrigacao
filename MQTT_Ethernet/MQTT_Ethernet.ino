@@ -28,11 +28,9 @@ PubSubClient mqttClient(ethClient);
 // Sensores
 dht DHT;
 
-float humidityInternal = 0;
-float temperatureInternal = 0;
-
-// Auxiliar para o contador
-unsigned long previousTime5s = 0;
+int flowPin = 2;    //Este é o pino de entrada no Arduino
+double flowRate;    //Este é o valor que pretende-se calcular
+volatile int count; 
 
 void setup() {
 #ifdef DEBUG
@@ -102,8 +100,6 @@ void callback(char* topic, byte* payload, unsigned int length) {
       response += "/sun_incidence/" + String(analogRead(pin));
     } else if (cmd.equals("water_level")) {
       response += "/water_level/" + String(analogRead(pin));
-    } else if (cmd.equals("rain")) {
-      // retorna leitura do sensor de chuva
     }
 
     if (store != "") {
@@ -123,7 +119,10 @@ void callback(char* topic, byte* payload, unsigned int length) {
 
 // Pinos
 void initPins() {
-  for (int pin = 2; pin <= 53; pin++) {
+  pinMode(2, INPUT); //Seta o pino de entrada
+  attachInterrupt(0, Flow, RISING);  //Configura o interruptor 0 (pino 2 no Arduino Uno) para rodar a função "Flow"
+
+  for (int pin = 3; pin <= 7; pin++) {
     pinMode(pin, OUTPUT);
     digitalWrite(pin, HIGH);
   }

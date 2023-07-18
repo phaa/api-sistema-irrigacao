@@ -285,7 +285,10 @@ class App {
       }
       case 'water_level': {
         return '';
-      }
+      }/* 
+      case 'flow': {
+        return '';
+      } */
       default: {
         throw new TypeError('Não há esse tipo de sensor');
       }
