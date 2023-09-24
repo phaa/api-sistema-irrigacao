@@ -34,7 +34,7 @@ class App {
   private boardInput: string = 'esp32/placa/input';
 
   private mqttTimer!: Timer;
-  private readingsTimer!: Timer;
+  private storeReadingsTimer!: Timer;
 
   constructor() {
     this.app = express();
@@ -93,12 +93,12 @@ class App {
   }
 
   private async initTimers() {
-    this.mqttTimer = new Timer(5000, this.handleMqttLoop);
-    this.readingsTimer = new Timer(60000 * 60, this.readingLoop);
+    this.mqttTimer = new Timer(60 * 1000, this.handleMqttLoop); // a cada minuto
+    this.storeReadingsTimer = new Timer(60000 * 60, this.readingLoop); // a cada hora
 
     // Começa o loop intermitente dos timers
     this.mqttTimer.loop();
-    this.readingsTimer.loop();
+    this.storeReadingsTimer.loop();
   }
 
   private initExpress() {
@@ -114,7 +114,7 @@ class App {
   }
 
   private initializeControllers() {
-    console.log("[Controllers] Inciando controladores...")
+    console.log("[Express] Inciando controladores...")
     const controllers = [
       new UserController(),
       new SensorController(),
@@ -124,7 +124,7 @@ class App {
     controllers.forEach((controller) => {
       this.app.use('/', controller.router);
     });
-    console.log("[Controllers] Controladores iniciados com sucesso")
+    console.log("[Express] Controladores iniciados com sucesso")
   }
   //#endregion
 
@@ -144,6 +144,7 @@ class App {
 
   private async handleSensorInput(payload: Payload) {
     try {
+      console.log(payload)
       const filter = {
         sensorType: payload.instruction, //tipo de sensor
         pin: payload.pin,
@@ -232,6 +233,7 @@ class App {
     for (let sensor of sensors) {
       let payload = `${sensor.pin}/${sensor.sensorType}`;
       this.mqttClient.publish(this.boardInput, this.store ? payload += '/true' : payload);
+      console.log("Publicou: " + payload)
     }
 
     if (this.store) {
