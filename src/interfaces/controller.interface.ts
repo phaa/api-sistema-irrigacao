@@ -6,6 +6,7 @@ interface Controller {
   router: Router;
   mqttClient?: MqttClient;
   outputTopic?: string;
+  sudoMode?: boolean;
 }
  
 export default Controller;

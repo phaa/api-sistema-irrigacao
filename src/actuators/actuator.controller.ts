@@ -10,10 +10,12 @@ class ActuatorController implements Controller {
   private actuator = ActuatorModel;
   public mqttClient: MqttClient;
   public outputTopic: string;
+  public sudoMode: boolean;
 
-  constructor(mqttClient: MqttClient, outputTopic: string) {
+  constructor(mqttClient: MqttClient, outputTopic: string, sudoMode: boolean) {
     this.mqttClient = mqttClient;
     this.outputTopic = outputTopic;
+    this.sudoMode = sudoMode;
     this.initializeRoutes();
   }
 
@@ -89,11 +91,16 @@ class ActuatorController implements Controller {
 
   private toggleActuator: RequestHandler = async (req: Request, res: Response) => {
     try {
+
+      /* if(!this.sudoMode) {
+        return res.status(200).json({ message: "Você precisa de privilégios para isso" });
+      } */
+
       const id = req.params.id;
       const actuatorData: Actuator = req.body;
       const actuator = await this.actuator.findByIdAndUpdate(id, actuatorData, { new: true });
       if (actuator) {
-        this.mqttClient.publish(this.outputTopic, `${actuatorData.value}:${actuator.pin}`);
+        this.mqttClient.publish(this.outputTopic, `${actuator.pin}/${actuatorData.value}`);
         return res.status(200).json({ actuator: actuator });
       }
       

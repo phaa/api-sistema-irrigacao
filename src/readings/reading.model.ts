@@ -3,6 +3,7 @@ import Reading from './reading.interface';
 
 const readingSchema = new mongoose.Schema<Reading>({
   value: { type: Number, required: true },
+  value2: { type: Number },
   sensor: {
     ref: 'Sensor',
     type: mongoose.Schema.Types.ObjectId,
