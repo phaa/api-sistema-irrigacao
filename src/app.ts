@@ -29,7 +29,6 @@ class App {
   // Varáveis de classe 
   private app: express.Application;
   private mqttClient!: MqttClient;
-  private store: boolean = false;
   private automaticMode: boolean = true;
 
   private serverInput: string = 'esp32/server/input';
@@ -202,8 +201,6 @@ class App {
           console.log(`${actuator.description} ${actuator.pin}/${state}`) */
         }
       }
-
-      this.store = false;
     }
     catch (err) {
       console.error(err)

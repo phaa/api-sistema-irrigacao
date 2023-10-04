@@ -10,12 +10,12 @@ class ActuatorController implements Controller {
   private actuator = ActuatorModel;
   public mqttClient: MqttClient;
   public outputTopic: string;
-  public sudoMode: boolean;
+  public automaticMode: boolean;
 
-  constructor(mqttClient: MqttClient, outputTopic: string, sudoMode: boolean) {
+  constructor(mqttClient: MqttClient, outputTopic: string, automaticMode: boolean) {
     this.mqttClient = mqttClient;
     this.outputTopic = outputTopic;
-    this.sudoMode = sudoMode;
+    this.automaticMode = automaticMode;
     this.initializeRoutes();
   }
 
@@ -29,6 +29,7 @@ class ActuatorController implements Controller {
     this.router.delete(`${this.path}/:id`, this.deleteActuator);
     this.router.post(this.path, this.createActuator);
     this.router.post(`${this.path}/toggle-actuator/:id`, this.toggleActuator);
+    this.router.post(`${this.path}/toggle-automatic-mode/:automatic`,this.toggleAutomaticMode)
   }
 
   private getAllActuators: RequestHandler = async (req: Request, res: Response) => {
@@ -91,11 +92,6 @@ class ActuatorController implements Controller {
 
   private toggleActuator: RequestHandler = async (req: Request, res: Response) => {
     try {
-
-      /* if(!this.sudoMode) {
-        return res.status(200).json({ message: "Você precisa de privilégios para isso" });
-      } */
-
       const id = req.params.id;
       const actuatorData: Actuator = req.body;
       const actuator = await this.actuator.findByIdAndUpdate(id, actuatorData, { new: true });
@@ -103,7 +99,16 @@ class ActuatorController implements Controller {
         this.mqttClient.publish(this.outputTopic, `${actuator.pin}/${actuatorData.value}`);
         return res.status(200).json({ actuator: actuator });
       }
-      
+    }
+    catch (error: any) {
+      return res.status(500).json({ message: error.message });
+    }
+  }
+
+  private toggleAutomaticMode: RequestHandler = async (req: Request, res: Response) => {
+    try {
+      const automatic = Boolean(req.params.automatic);
+      this.automaticMode = automatic;
     }
     catch (error: any) {
       return res.status(500).json({ message: error.message });
