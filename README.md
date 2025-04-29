@@ -1,102 +1,102 @@
-# API para Sistema de Irrigação Inteligente (IoT)
+# Agrosoft - API for Greenhouse IoT Irrigation System
 
 <p align="center">
-  <img src="https://github.com/phaa/iot-sistema-irrigacao/blob/main/estufa1.jpeg" title="Projeto na VI Secitex" width="500" />
+  <img src="https://github.com/phaa/iot-sistema-irrigacao/blob/main/estufa1.jpeg" title="Project at VI Secitex" width="500" />
 </p>
 
 <p align="center">
-  <img src="https://github.com/phaa/iot-sistema-irrigacao/blob/main/estufa2.jpeg" title="Projeto na VI Secitex" width="500" />
+  <img src="https://github.com/phaa/iot-sistema-irrigacao/blob/main/estufa2.jpeg" title="Project at VI Secitex" width="500" />
 </p>
 
 <p align="center">
-  <img src="https://github.com/phaa/iot-sistema-irrigacao/blob/main/estufa3.jpeg" title="Projeto na VI Secitex" width="500" />
+  <img src="https://github.com/phaa/iot-sistema-irrigacao/blob/main/estufa3.jpeg" title="Project at VI Secitex" width="500" />
 </p>
 
-## 🪴 Apresentação
+## Presentation
 
-Este projeto inovador nasceu durante a disciplina de Internet das Coisas (IoT) do curso de Tecnologia em Sistemas para Internet no Instituto Federal de Educação, Ciência e Tecnologia do Rio Grande do Norte (IFRN), *Campus* Canguaretama, e foi calorosamente recebido e reconhecido pela diretoria na VI Semana de Ciência, Tecnologia e Extensão (Secitex) do IFRN em Currais Novos em 2023. 
+This innovative project originated during the Internet of Things (IoT) course of the Internet Systems Technology undergraduate program at the Federal Institute of Education, Science and Technology of Rio Grande do Norte (IFRN), *Campus* Canguaretama, and was warmly received and recognized by the board at the VI Science, Technology and Extension Week (Secitex) of IFRN in Currais Novos in 2023.
 
-A motivação central foi desenvolver um sistema de automação de baixo custo e acessível para estufas, direcionado especialmente a produtores familiares que enfrentam desafios na gestão de áreas de produção maiores, com o objetivo de capacitá-los a aumentar significativamente sua produtividade através da otimização inteligente do uso de recursos, mantendo as plantações em condições ideais de temperatura e umidade do solo e do ar de forma constante. 
+The central motivation was to develop a low-cost and accessible automation system for greenhouses, specifically aimed at family farmers who face challenges in managing larger production areas, with the goal of empowering them to significantly increase their productivity through the intelligent optimization of resource use, constantly maintaining crops in ideal temperature and soil/air humidity conditions.
 
-Esta API *backend* em TypeScript serve como a ponte entre os dispositivos IoT (baseados em ESP32 e Arduino) e a lógica de controle e armazenamento de dados do sistema, recebendo dados de sensores via MQTT, processando-os, armazenando-os em MongoDB Atlas e enviando comandos de controle para os atuadores, também via MQTT.
+This TypeScript *backend* API serves as the bridge between the IoT devices (based on ESP32 and Arduino) and the system's control and data storage logic, receiving sensor data via MQTT, processing it, storing it in MongoDB Atlas, and sending control commands to the actuators, also via MQTT.
 
-## ⚙️ Tecnologias Utilizadas
+## Technologies Used
 
-* **TypeScript:** Linguagem de programação que adiciona tipagem estática ao JavaScript, melhorando a manutenção e escalabilidade do código.
-* **Node.js:** Ambiente de execução JavaScript *server-side*.
-* **Express:** Framework web minimalista e flexível para Node.js, utilizado para construir a API RESTful.
-* **Mongoose:** Biblioteca de modelagem de objetos MongoDB para Node.js, fornecendo uma maneira elegante de interagir com o banco de dados.
-* **MQTT (Message Queuing Telemetry Transport):** Protocolo de mensagens leve, utilizado para a comunicação entre a API e os dispositivos IoT.
-* **MongoDB Atlas:** Serviço de banco de dados na nuvem escalável e totalmente gerenciado.
-* **.env:** Utilizado para gerenciar variáveis de ambiente de forma segura.
-* **cors:** Middleware do Express para habilitar o Cross-Origin Resource Sharing (CORS).
-* **body-parser:** Middleware do Express para analisar corpos de requisição HTTP.
+* **TypeScript:** Programming language that adds static typing to JavaScript, improving code maintainability and scalability.
+* **Node.js:** *Server-side* JavaScript runtime environment.
+* **Express:** Minimalist and flexible web framework for Node.js, used to build the RESTful API.
+* **Mongoose:** MongoDB object modeling library for Node.js, providing an elegant way to interact with the database.
+* **MQTT (Message Queuing Telemetry Transport):** Lightweight messaging protocol used for communication between the API and IoT devices.
+* **MongoDB Atlas:** Scalable and fully managed cloud database service.
+* **.env:** Used to securely manage environment variables.
+* **cors:** Express middleware to enable Cross-Origin Resource Sharing (CORS).
+* **body-parser:** Express middleware to parse HTTP request bodies.
 
-## 🛠️ Configuração e Instalação
+## Setup and Installation
 
-Para executar esta API localmente, siga os seguintes passos:
+To run this API locally, follow these steps:
 
-1.  **Clone o repositório:**
+1.  **Clone the repository:**
     ```bash
-    git clone https://github.com/phaa/api-sistema-irrigacao.git
+    git clone [https://github.com/phaa/api-sistema-irrigacao.git](https://github.com/phaa/api-sistema-irrigacao.git)
     cd api-sistema-irrigacao
     ```
 
-2.  **Instale as dependências:**
+2.  **Install dependencies:**
     ```bash
     npm install
-    # ou
+    # or
     yarn install
     ```
 
-3.  **Configure as variáveis de ambiente:**
-    Crie um arquivo `.env` na raiz do projeto e preencha com as seguintes informações:
+3.  **Configure environment variables:**
+    Create a `.env` file in the project root and fill it with the following information:
     ```env
-    PORT=3000 # Ou a porta de sua preferência
-    MONGO_USER=<seu_usuario_mongodb_atlas>
-    MONGO_PASSWORD=<sua_senha_mongodb_atlas>
-    MONGO_PATH=<url_do_seu_cluster_mongodb_atlas>
-    MQTT_BROKER_URL=<url_do_seu_broker_mqtt>
+    PORT=3000 # Or your preferred port
+    MONGO_USER=<your_mongodb_atlas_username>
+    MONGO_PASSWORD=<your_mongodb_atlas_password>
+    MONGO_PATH=<your_mongodb_atlas_cluster_url>
+    MQTT_BROKER_URL=<your_mqtt_broker_url>
     ```
-    Certifique-se de substituir os placeholders (`<...>` ) pelas suas credenciais e URLs corretas.
+    Make sure to replace the placeholders (`<...>`) with your correct credentials and URLs.
 
-4.  **Execute a API:**
+4.  **Run the API:**
     ```bash
     npm start
     ```
-    Este comando iniciará o servidor de desenvolvimento utilizando o `ts-node-dev`.
+    This command will start the development server using `ts-node-dev`.
 
-## ⚙️ Funcionalidades Principais
+## Main Features
 
-A API implementa as seguintes funcionalidades:
+The API implements the following main functionalities:
 
-* **Comunicação MQTT:**
-    * Inscrita no tópico `esp32/server/input` para receber comandos e dados dos dispositivos ESP32.
-    * Publica comandos para os atuadores no tópico `esp32/placa/input`.
-    * Processa mensagens MQTT para atualizar o estado de sensores e atuadores no banco de dados.
-* **Gerenciamento de Sensores:**
-    * Armazena informações sobre os sensores (tipo, pin, descrição, valores de referência).
-    * Recebe dados de sensores (temperatura, umidade, umidade do solo, nível da água) e os atualiza no banco de dados.
-    * Implementa lógica para converter valores brutos de sensores em unidades significativas (ex: umidade do solo em porcentagem).
-* **Gerenciamento de Atuadores:**
-    * Armazena informações sobre os atuadores (tipo, pin, descrição, estado atual).
-    * Recebe comandos para alterar o estado dos atuadores (ligar/desligar) via MQTT.
-    * Fornece endpoints para controlar manualmente os atuadores via requisições HTTP (implementado nos controllers).
-* **Lógica de Automação:**
-    * Implementa um modo automático onde a API toma decisões sobre o acionamento dos atuadores com base nos valores dos sensores e em limites predefinidos.
-    * A lógica de controle para irrigação, iluminação e exaustão é baseada nos valores mínimo e máximo configurados para cada sensor.
-* **Armazenamento de Leituras:**
-    * Periodicamente (a cada hora, configurável), armazena as leituras dos sensores no banco de dados para histórico e futuras análises.
-* **Endpoints RESTful:**
-    * Fornece endpoints para gerenciar usuários, sensores, atuadores e leituras através de requisições HTTP (implementados nos controllers).
+* **MQTT Communication:**
+    * Subscribed to the `esp32/server/input` topic to receive commands and data from ESP32 devices.
+    * Publishes commands for actuators on the `esp32/placa/input` topic.
+    * Processes MQTT messages to update the state of sensors and actuators in the database.
+* **Sensor Management:**
+    * Stores information about sensors (type, pin, description, reference values).
+    * Receives sensor data (temperature, humidity, soil moisture, water level) and updates it in the database.
+    * Implements logic to convert raw sensor values into meaningful units (e.g., soil moisture in percentage).
+* **Actuator Management:**
+    * Stores information about actuators (type, pin, description, current state).
+    * Receives commands to change the state of actuators (on/off) via MQTT.
+    * Provides endpoints to manually control actuators via HTTP requests (implemented in the controllers).
+* **Automation Logic:**
+    * Implements an automatic mode where the API makes decisions about triggering actuators based on sensor values and predefined limits.
+    * The control logic for irrigation, lighting, and exhaust is based on the minimum and maximum values configured for each sensor.
+* **Reading Storage:**
+    * Periodically (every hour, configurable), stores sensor readings in the database for history and future analysis.
+* **RESTful Endpoints:**
+    * Provides endpoints to manage users, sensors, actuators, and readings via HTTP requests (implemented in the controllers).
 
-## 📂 Estrutura de Arquivos
+## File Structure
 ```
 api-sistema-irrigacao/
 ├── actuators/
 │   ├── actuator.controller.ts
 │   ├── actuator.interface.ts
-│   └──actuator.model.ts
+│   └── actuator.model.ts
 ├── controllers/
 │   ├── user.controller.ts
 │   ├── sensor.controller.ts
@@ -125,16 +125,16 @@ api-sistema-irrigacao/
 └── tsconfig.json
 ```
 
-## 🚀 Próximos Passos e Melhorias Futuras
+## Next Steps and Future Improvements
 
-Assim como na parte de IoT, esta API pode ser aprimorada com:
+Similar to the IoT part, this API can be improved with:
 
-* Implementação de autenticação e autorização para proteger os endpoints da API.
-* Criação de testes unitários e de integração para garantir a robustez do código.
-* Melhorias na lógica de automação, talvez com a introdução de regras mais complexas ou aprendizado de máquina.
-* Implementação de um sistema de logs mais detalhado.
-* Documentação da API utilizando ferramentas como Swagger ou OpenAPI.
+* Implementation of authentication and authorization to protect API endpoints.
+* Creation of unit and integration tests to ensure code robustness.
+* Improvements to the automation logic, perhaps with the introduction of more complex rules or machine learning.
+* Implementation of a more detailed logging system.
+* API documentation using tools like Swagger or OpenAPI.
 
-## 🧑‍💻 Desenvolvedor
+## Developer
 
 [Pedro Henrique Amorim de Azevedo](https://github.com/phaa)
